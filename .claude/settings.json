@@ -1,0 +1,77 @@
+{
+  "permissions": {
+    "allowedTools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "MultiEdit",
+      "NotebookEdit",
+      "WebFetch",
+      "WebSearch"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Write(.env)",
+      "Write(.env.*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write(*.py)|Edit(*.py)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd $CLAUDE_PROJECT_DIR && ruff check --fix $CLAUDE_FILE_PATHS 2>/dev/null; ruff format $CLAUDE_FILE_PATHS 2>/dev/null; echo 'Formatted'",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Write(*.svelte)|Write(*.ts)|Edit(*.svelte)|Edit(*.ts)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd $CLAUDE_PROJECT_DIR/web-ui && npx prettier --write $CLAUDE_FILE_PATHS 2>/dev/null; echo 'Formatted'",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const fs=require('fs');let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const i=JSON.parse(d);const p=i.tool_input?.file_path||'';if(/(api_key|secret|password|token)\\s*[:=]\\s*['\\\"][^$]/i.test(i.tool_input?.content||'')){console.error('BLOCKED: Possible hardcoded secret detected');process.exit(2)}}catch{}})\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const fs=require('fs');let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const i=JSON.parse(d);const cmd=i.tool_input?.command||'';if(/rm\\s+-[a-z]*r[a-z]*f|rm\\s+-[a-z]*f[a-z]*r/.test(cmd)){console.error('BLOCKED: rm -rf not allowed');process.exit(2)}}catch{}})\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd $CLAUDE_PROJECT_DIR && python -m pytest tests/ -v --tb=short 2>&1 | tail -20; echo '--- Tests run on stop ---'",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

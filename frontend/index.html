@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>File Converter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Design tokens (Glacier + Dusk) ──────────────────────────────────── */
+    :root {
+      --bg:           #1a1915;
+      --panel:        #242320;
+      --elevated:     #2e2c28;
+      --border:       #3a3834;
+      --border-dim:   #2a2826;
+      --accent:       #CBF3F0;
+      --accent-dim:   #5a8a87;
+      --accent-glow:  rgba(203,243,240,0.07);
+      --accent-glow2: rgba(203,243,240,0.13);
+      --secondary:    #5C4A8A;
+      --text:         #e8e6e1;
+      --text-2:       #8a887f;
+      --text-muted:   #5a584f;
+      --success:      #10B981;
+      --error:        #EF4444;
+      --warning:      #F59E0B;
+      --radius:       14px;
+      --radius-sm:    8px;
+      --font-d:       'Syne', sans-serif;
+      --font-m:       'IBM Plex Mono', monospace;
+      --shadow:       0 4px 24px -4px rgba(0,0,0,0.55);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-m);
+      font-size: 13px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::-webkit-scrollbar            { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track      { background: transparent; }
+    ::-webkit-scrollbar-thumb      { background: var(--border); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover{ background: var(--accent-dim); }
+
+    /* ── Layout ───────────────────────────────────────────────────────────── */
+    .app { display: flex; height: 100vh; overflow: hidden; }
+
+    .sidebar {
+      width: 240px; min-width: 240px;
+      background: var(--panel);
+      border-right: 1px solid var(--border-dim);
+      display: flex; flex-direction: column;
+      padding: 24px 0 16px;
+      overflow-y: auto;
+    }
+
+    .sidebar-logo {
+      padding: 0 20px 24px;
+      font-family: var(--font-d);
+      font-size: 18px; font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--accent);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .sidebar-logo svg { opacity: 0.85; }
+
+    .sidebar-section { padding: 0 12px 8px; }
+    .sidebar-label {
+      padding: 0 8px 6px;
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      color: var(--text-2);
+      font-size: 12.5px;
+      transition: background 0.15s, color 0.15s;
+      user-select: none;
+    }
+    .nav-item:hover { background: var(--elevated); color: var(--text); }
+    .nav-item.active { background: var(--accent-glow2); color: var(--accent); }
+    .nav-item svg { opacity: 0.7; flex-shrink: 0; }
+    .nav-item.active svg { opacity: 1; }
+
+    .sidebar-spacer { flex: 1; }
+
+    .sidebar-footer {
+      padding: 12px 20px 0;
+      border-top: 1px solid var(--border-dim);
+      font-size: 11px; color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* ── Main area ───────────────────────────────────────────────────────── */
+    .main {
+      flex: 1; overflow-y: auto;
+      padding: 32px 40px;
+      display: flex; flex-direction: column; gap: 24px;
+    }
+
+    .page { display: none; flex-direction: column; gap: 24px; }
+    .page.active { display: flex; }
+
+    /* ── Page header ─────────────────────────────────────────────────────── */
+    .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .page-title {
+      font-family: var(--font-d);
+      font-size: 26px; font-weight: 800;
+      letter-spacing: -0.5px;
+      line-height: 1.2;
+    }
+    .page-subtitle { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+
+    /* ── Mode toggle ─────────────────────────────────────────────────────── */
+    .mode-toggle {
+      display: flex;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 3px;
+      gap: 2px;
+    }
+    .mode-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--text-2);
+      font-family: var(--font-m);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .mode-btn.active {
+      background: var(--elevated);
+      color: var(--accent);
+    }
+
+    /* ── Quality selector ───────────────────────────────────────────────── */
+    .quality-bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px;
+      background: var(--panel);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+    }
+    .quality-label { font-size: 11px; color: var(--text-2); white-space: nowrap; }
+    .quality-opts { display: flex; gap: 4px; flex-wrap: wrap; }
+    .quality-opt {
+      padding: 4px 12px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-2);
+      font-family: var(--font-m);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .quality-opt:hover { border-color: var(--accent-dim); color: var(--text); }
+    .quality-opt.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+
+    /* ── Bento cards ─────────────────────────────────────────────────────── */
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+    .card-title {
+      font-family: var(--font-d);
+      font-size: 14px; font-weight: 600;
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-title svg { color: var(--accent); }
+
+    /* ── Drop zone ───────────────────────────────────────────────────────── */
+    .drop-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius-sm);
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: var(--accent-dim);
+      background: var(--accent-glow);
+    }
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0;
+      opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .drop-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.5; }
+    .drop-text { font-size: 13px; color: var(--text-2); }
+    .drop-text strong { color: var(--text); }
+    .drop-hint { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+    /* ── Single file info ────────────────────────────────────────────────── */
+    .file-info {
+      display: none;
+      align-items: center; gap: 14px;
+      padding: 14px 16px;
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-top: 12px;
+    }
+    .file-info.visible { display: flex; }
+    .file-icon { font-size: 24px; }
+    .file-meta { flex: 1; min-width: 0; }
+    .file-name {
+      font-size: 13px; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .file-details { font-size: 11px; color: var(--text-2); margin-top: 2px; }
+    .file-badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .badge-doc      { background: rgba(203,243,240,0.12); color: var(--accent); }
+    .badge-image    { background: rgba(139,92,246,0.15); color: #a78bfa; }
+    .badge-audio    { background: rgba(245,158,11,0.12); color: #fbbf24; }
+    .badge-video    { background: rgba(239,68,68,0.12); color: #f87171; }
+    .badge-data     { background: rgba(16,185,129,0.12); color: #34d399; }
+    .badge-archive  { background: rgba(99,102,241,0.12); color: #818cf8; }
+
+    /* ── Format selector (single) ───────────────────────────────────────── */
+    .format-grid {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin-top: 16px;
+    }
+    .format-chip {
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--elevated);
+      color: var(--text-2);
+      font-family: var(--font-m);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .format-chip:hover { border-color: var(--accent-dim); color: var(--text); }
+    .format-chip.selected { border-color: var(--accent); color: var(--accent); background: var(--accent-glow2); }
+
+    .format-empty { font-size: 12px; color: var(--text-muted); padding: 8px 0; }
+
+    /* ── Action button ───────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      border: none;
+      font-family: var(--font-m);
+      font-size: 13px; font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #111;
+    }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+    .btn-secondary {
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-secondary:hover { border-color: var(--accent-dim); }
+    .btn-success {
+      background: var(--success);
+      color: #fff;
+    }
+    .btn-success:hover { filter: brightness(1.1); }
+
+    .btn-row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+    /* ── Progress / status ───────────────────────────────────────────────── */
+    .progress-wrap { margin-top: 16px; }
+    .progress-bar-bg {
+      height: 4px; border-radius: 2px;
+      background: var(--elevated);
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+    .progress-label { font-size: 11px; color: var(--text-2); margin-top: 6px; }
+
+    .status-msg {
+      display: none;
+      align-items: center; gap: 8px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      margin-top: 12px;
+    }
+    .status-msg.visible { display: flex; }
+    .status-msg.success { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); color: var(--success); }
+    .status-msg.error   { background: rgba(239,68,68,0.1);  border: 1px solid rgba(239,68,68,0.25);  color: var(--error); }
+    .status-msg.info    { background: var(--accent-glow);   border: 1px solid rgba(203,243,240,0.2); color: var(--accent); }
+
+    /* ── Bulk file list ──────────────────────────────────────────────────── */
+    .bulk-toolbar {
+      display: flex; align-items: center; gap: 10px;
+      flex-wrap: wrap;
+      padding: 10px 14px;
+      background: var(--elevated);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      margin-bottom: 12px;
+    }
+    .bulk-toolbar-label { font-size: 11px; color: var(--text-2); white-space: nowrap; }
+    .bulk-format-select {
+      padding: 5px 10px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      font-family: var(--font-m);
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+    }
+    .bulk-format-select:focus { border-color: var(--accent-dim); }
+    .bulk-apply-btn {
+      padding: 5px 12px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: var(--elevated);
+      color: var(--text-2);
+      font-family: var(--font-m);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .bulk-apply-btn:hover { border-color: var(--accent-dim); color: var(--text); }
+
+    .bulk-file-list { display: flex; flex-direction: column; gap: 6px; }
+
+    .bulk-file-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px;
+      background: var(--elevated);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      transition: border-color 0.15s;
+    }
+    .bulk-file-row.converting { border-color: rgba(203,243,240,0.3); }
+    .bulk-file-row.done       { border-color: rgba(16,185,129,0.3); }
+    .bulk-file-row.error      { border-color: rgba(239,68,68,0.3); }
+
+    .bulk-file-icon { font-size: 20px; flex-shrink: 0; }
+    .bulk-file-name {
+      flex: 1; min-width: 0;
+      font-size: 12px; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .bulk-file-size { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+    .bulk-file-cat  { flex-shrink: 0; }
+
+    .bulk-file-fmt {
+      flex-shrink: 0;
+    }
+    .bulk-file-fmt select {
+      padding: 4px 8px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      font-family: var(--font-m);
+      font-size: 11px;
+      cursor: pointer;
+      outline: none;
+      min-width: 80px;
+    }
+    .bulk-file-fmt select:focus { border-color: var(--accent-dim); }
+
+    .bulk-file-status {
+      flex-shrink: 0; width: 20px; text-align: center;
+      font-size: 14px;
+    }
+    .status-pending    { color: var(--text-muted); }
+    .status-converting { color: var(--accent); animation: spin 1s linear infinite; display: inline-block; }
+    .status-done       { color: var(--success); }
+    .status-error      { color: var(--error); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .bulk-error-note {
+      font-size: 10px; color: var(--error);
+      margin-top: 2px; padding-left: 24px;
+    }
+
+    /* ── History ─────────────────────────────────────────────────────────── */
+    .history-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .history-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      background: var(--elevated);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: border-color 0.15s;
+      animation: fadeUp 0.25s ease both;
+    }
+    .history-item:hover { border-color: var(--accent-dim); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .history-icon { font-size: 20px; flex-shrink: 0; }
+    .history-meta { flex: 1; min-width: 0; }
+    .history-name {
+      font-size: 12px; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .history-detail { font-size: 10px; color: var(--text-2); margin-top: 2px; }
+    .history-action { flex-shrink: 0; }
+    .history-dl {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 10px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-2);
+      font-family: var(--font-m); font-size: 11px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+    .history-dl:hover { border-color: var(--accent-dim); color: var(--accent); }
+    .history-empty {
+      font-size: 12px; color: var(--text-muted);
+      padding: 20px 0; text-align: center;
+    }
+
+    /* ── About page ──────────────────────────────────────────────────────── */
+    .about-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .about-card {
+      background: var(--elevated);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      padding: 20px;
+    }
+    .about-card-title { font-family: var(--font-d); font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--accent); }
+    .about-format-list { display: flex; flex-wrap: wrap; gap: 5px; }
+    .about-fmt-tag {
+      padding: 2px 8px; border-radius: 4px;
+      background: var(--panel); border: 1px solid var(--border);
+      font-size: 10px; text-transform: uppercase;
+      color: var(--text-2); letter-spacing: 0.04em;
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .app { flex-direction: column; }
+      .sidebar { width: 100%; min-width: unset; padding: 12px 0 0; flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--border-dim); }
+      .sidebar-logo { padding: 0 16px; white-space: nowrap; }
+      .sidebar-section { display: flex; flex-direction: row; padding: 0 8px; }
+      .sidebar-label { display: none; }
+      .sidebar-spacer { display: none; }
+      .sidebar-footer { display: none; }
+      .main { padding: 20px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+      </svg>
+      FileConvert
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Convert</div>
+      <div class="nav-item active" data-page="convert">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+        </svg>
+        Convert Files
+      </div>
+      <div class="nav-item" data-page="history">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+        History
+      </div>
+      <div class="nav-item" data-page="about">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        About
+      </div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-footer">
+      <div>File Converter v1.0</div>
+      <div style="margin-top:2px;color:var(--text-muted)">FastAPI + ffmpeg + pandoc</div>
+    </div>
+  </nav>
+
+  <!-- ── Main content ─────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         CONVERT PAGE
+         ═══════════════════════════════════════════════════════════════ -->
+    <div class="page active" id="page-convert">
+
+      <div class="page-header">
+        <div>
+          <div class="page-title">Convert Files</div>
+          <div class="page-subtitle">Drop one file to convert individually, or multiple files for bulk ZIP conversion</div>
+        </div>
+      </div>
+
+      <!-- Quality bar (shared) -->
+      <div class="quality-bar">
+        <span class="quality-label">Quality:</span>
+        <div class="quality-opts" id="quality-opts">
+          <button class="quality-opt active" data-q="original" onclick="setQuality('original')">Original</button>
+          <button class="quality-opt" data-q="lossless" onclick="setQuality('lossless')">Lossless</button>
+          <button class="quality-opt" data-q="high" onclick="setQuality('high')">High</button>
+          <button class="quality-opt" data-q="medium" onclick="setQuality('medium')">Medium</button>
+          <button class="quality-opt" data-q="low" onclick="setQuality('low')">Low</button>
+        </div>
+      </div>
+
+      <!-- ── Unified upload card ──────────────────────────────────────── -->
+      <div class="card">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload
+        </div>
+
+        <div class="drop-zone" id="drop-zone"
+             ondragover="onDragOver(event)" ondrop="onDrop(event)">
+          <input type="file" id="file-input" multiple onchange="onFilePick(event)" />
+          <div class="drop-icon">⬆</div>
+          <div class="drop-text"><strong>Click or drag</strong> files here</div>
+          <div class="drop-hint">One file → single convert &nbsp;·&nbsp; Multiple files → bulk convert + ZIP download</div>
+        </div>
+
+        <!-- Single file info strip (shown after single upload) -->
+        <div class="file-info" id="file-info-single">
+          <div class="file-icon" id="fi-icon">📄</div>
+          <div class="file-meta">
+            <div class="file-name" id="fi-name">—</div>
+            <div class="file-details">
+              <span id="fi-size">—</span> &nbsp;·&nbsp;
+              <span class="file-badge" id="fi-badge">—</span>
+              &nbsp;·&nbsp; detected as <strong id="fi-fmt">—</strong>
+            </div>
+          </div>
+          <button class="btn btn-secondary" onclick="resetAll()" style="padding:6px 10px;font-size:11px;">Clear</button>
+        </div>
+
+        <div class="status-msg" id="status-single"></div>
+      </div>
+
+      <!-- Single: Convert To card (hidden until single file is uploaded) -->
+      <div class="card" id="format-card-single" style="display:none;">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          Convert To
+        </div>
+        <div class="format-grid" id="format-grid-single"></div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="convert-btn-single" onclick="convertSingle()" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            Convert
+          </button>
+        </div>
+
+        <div class="progress-wrap" id="progress-wrap-single" style="display:none;">
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill-single"></div></div>
+          <div class="progress-label">Converting…</div>
+        </div>
+
+      </div>
+
+      <!-- Bulk: File list card (hidden until 2+ files are uploaded) -->
+      <div class="card" id="bulk-list-card" style="display:none;">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          File List
+          <span id="bulk-count-badge" style="margin-left:auto;font-size:11px;color:var(--text-2);font-family:var(--font-m);font-weight:400;"></span>
+        </div>
+
+        <!-- "Convert all to…" toolbar -->
+        <div class="bulk-toolbar">
+          <span class="bulk-toolbar-label">Convert all to:</span>
+          <select class="bulk-format-select" id="bulk-global-fmt">
+            <option value="">— pick format —</option>
+          </select>
+          <button class="bulk-apply-btn" onclick="applyGlobalFormat()">Apply to compatible</button>
+          <span style="flex:1;"></span>
+          <button class="bulk-apply-btn" onclick="document.getElementById('file-input').click()" style="color:var(--accent);">+ Add files</button>
+          <button class="bulk-apply-btn" onclick="resetAll()" style="color:var(--text-muted);">Clear all</button>
+        </div>
+
+        <div class="bulk-file-list" id="bulk-file-list"></div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="bulk-convert-btn" onclick="convertBulk()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            Convert All
+          </button>
+        </div>
+
+        <div class="status-msg" id="status-bulk"></div>
+      </div>
+
+    </div><!-- /#page-convert -->
+
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         HISTORY PAGE
+         ═══════════════════════════════════════════════════════════════ -->
+    <div class="page" id="page-history">
+      <div class="page-header">
+        <div>
+          <div class="page-title">History</div>
+          <div class="page-subtitle">Your conversion sessions this browser session</div>
+        </div>
+        <button class="btn btn-secondary" onclick="clearHistory()" style="font-size:11px;padding:7px 14px;">Clear</button>
+      </div>
+
+      <div class="card">
+        <div class="history-list" id="history-list">
+          <div class="history-empty">No conversions yet.</div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         ABOUT PAGE
+         ═══════════════════════════════════════════════════════════════ -->
+    <div class="page" id="page-about">
+      <div class="page-header">
+        <div>
+          <div class="page-title">About</div>
+          <div class="page-subtitle">Supported formats and engines</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="about-grid">
+          <div class="about-card">
+            <div class="about-card-title">📄 Documents</div>
+            <div class="about-format-list">
+              <span class="about-fmt-tag">PDF</span><span class="about-fmt-tag">DOCX</span>
+              <span class="about-fmt-tag">TXT</span><span class="about-fmt-tag">MD</span>
+              <span class="about-fmt-tag">HTML</span>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:8px;">pandoc + weasyprint</div>
+          </div>
+          <div class="about-card">
+            <div class="about-card-title">🖼 Images</div>
+            <div class="about-format-list">
+              <span class="about-fmt-tag">JPEG</span><span class="about-fmt-tag">PNG</span>
+              <span class="about-fmt-tag">WEBP</span><span class="about-fmt-tag">GIF</span>
+              <span class="about-fmt-tag">BMP</span><span class="about-fmt-tag">TIFF</span>
+              <span class="about-fmt-tag">ICO</span><span class="about-fmt-tag">SVG</span>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:8px;">Pillow + CairoSVG</div>
+          </div>
+          <div class="about-card">
+            <div class="about-card-title">🎵 Audio</div>
+            <div class="about-format-list">
+              <span class="about-fmt-tag">MP3</span><span class="about-fmt-tag">WAV</span>
+              <span class="about-fmt-tag">FLAC</span><span class="about-fmt-tag">AAC</span>
+              <span class="about-fmt-tag">M4A</span><span class="about-fmt-tag">OGG</span>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:8px;">ffmpeg-python (bitrate-aware)</div>
+          </div>
+          <div class="about-card">
+            <div class="about-card-title">🎬 Video</div>
+            <div class="about-format-list">
+              <span class="about-fmt-tag">MP4</span><span class="about-fmt-tag">MKV</span>
+              <span class="about-fmt-tag">AVI</span><span class="about-fmt-tag">WEBM</span>
+              <span class="about-fmt-tag">MOV</span><span class="about-fmt-tag">GIF</span>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:8px;">ffmpeg-python (CRF quality)</div>
+          </div>
+          <div class="about-card">
+            <div class="about-card-title">📊 Data</div>
+            <div class="about-format-list">
+              <span class="about-fmt-tag">CSV</span><span class="about-fmt-tag">JSON</span>
+              <span class="about-fmt-tag">XLSX</span><span class="about-fmt-tag">XML</span>
+              <span class="about-fmt-tag">YAML</span><span class="about-fmt-tag">TSV</span>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:8px;">pandas + openpyxl + PyYAML</div>
+          </div>
+          <div class="about-card">
+            <div class="about-card-title">📦 Archives</div>
+            <div class="about-format-list">
+              <span class="about-fmt-tag">ZIP</span><span class="about-fmt-tag">TAR</span>
+              <span class="about-fmt-tag">TAR.GZ</span><span class="about-fmt-tag">7Z</span>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:8px;">stdlib + py7zr</div>
+          </div>
+        </div>
+
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border-dim);">
+          <div style="font-family:var(--font-d);font-size:13px;font-weight:600;margin-bottom:12px;">Quality Levels</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
+            <div style="padding:12px;background:var(--elevated);border:1px solid var(--border-dim);border-radius:var(--radius-sm);">
+              <div style="font-size:11px;font-weight:600;color:var(--accent);">Original</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Matches source bitrate/resolution. Default and recommended.</div>
+            </div>
+            <div style="padding:12px;background:var(--elevated);border:1px solid var(--border-dim);border-radius:var(--radius-sm);">
+              <div style="font-size:11px;font-weight:600;color:#a78bfa;">Lossless</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">CRF 0 for video. WAV/FLAC passthrough for audio.</div>
+            </div>
+            <div style="padding:12px;background:var(--elevated);border:1px solid var(--border-dim);border-radius:var(--radius-sm);">
+              <div style="font-size:11px;font-weight:600;color:#fbbf24;">High</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Near-transparent quality. CRF 15 (x264) / 320k MP3.</div>
+            </div>
+            <div style="padding:12px;background:var(--elevated);border:1px solid var(--border-dim);border-radius:var(--radius-sm);">
+              <div style="font-size:11px;font-weight:600;color:#34d399;">Medium</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Balanced size/quality. CRF 23 (x264) / 192k MP3.</div>
+            </div>
+            <div style="padding:12px;background:var(--elevated);border:1px solid var(--border-dim);border-radius:var(--radius-sm);">
+              <div style="font-size:11px;font-weight:600;color:#f87171;">Low</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Smallest file. CRF 28 (x264) / 128k MP3.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   State
+   ═══════════════════════════════════════════════════════════════════════════ */
+const API = '';   // same origin; empty string = relative URLs
+
+let currentQuality = 'original';
+
+/* Single mode */
+let singleFileId   = null;
+let singleFormat   = null;
+let singleCategory = null;
+let singleFmts     = [];
+
+/* Bulk mode */
+let bulkFiles = [];   // [{file_id, filename, size, category, detected_format, available_formats, target_format, status, error}]
+
+/* History */
+let history = [];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Navigation
+   ═══════════════════════════════════════════════════════════════════════════ */
+document.querySelectorAll('.nav-item[data-page]').forEach(el => {
+  el.addEventListener('click', () => showPage(el.dataset.page));
+});
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelector(`.nav-item[data-page="${name}"]`).classList.add('active');
+  if (name === 'history') renderHistory();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Quality
+   ═══════════════════════════════════════════════════════════════════════════ */
+function setQuality(q) {
+  currentQuality = q;
+  document.querySelectorAll('.quality-opt').forEach(b => b.classList.toggle('active', b.dataset.q === q));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Drag & drop — unified drop zone
+   ═══════════════════════════════════════════════════════════════════════════ */
+function onDragOver(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.add('drag-over');
+}
+
+document.getElementById('drop-zone').addEventListener('dragleave', () => {
+  document.getElementById('drop-zone').classList.remove('drag-over');
+});
+
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  handleFiles(Array.from(e.dataTransfer.files));
+}
+
+/* ─── File input change ─────────────────────────────────────────────────── */
+function onFilePick(e) {
+  handleFiles(Array.from(e.target.files));
+  // Reset value so picking the same file(s) again still fires change
+  e.target.value = '';
+}
+
+/* ─── Router: 1 file → single, 2+ files → bulk (or add to existing bulk) ─ */
+function handleFiles(files) {
+  if (!files.length) return;
+  if (files.length === 1 && !bulkFiles.length) {
+    uploadSingle(files[0]);
+  } else {
+    uploadBulk(files);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ── SINGLE MODE ──────────────────────────────────────────────────────────
+   ═══════════════════════════════════════════════════════════════════════════ */
+async function uploadSingle(file) {
+  resetAll();
+  const fd = new FormData();
+  fd.append('file', file);
+
+  showStatus('status-single', 'info', 'Uploading…');
+  document.getElementById('format-card-single').style.display = '';
+  try {
+    const res  = await fetch(`${API}/api/upload`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Upload failed');
+
+    singleFileId   = data.file_id;
+    singleFmts     = data.available_formats || [];
+    singleFormat   = null;
+    singleCategory = data.category;
+
+    renderSingleFileInfo(data, file.size);
+    renderSingleFormats(singleFmts);
+    clearStatus('status-single');
+  } catch (err) {
+    document.getElementById('format-card-single').style.display = 'none';
+    showStatus('status-single', 'error', err.message);
+  }
+}
+
+function renderSingleFileInfo(data, sizeBytes) {
+  const info = document.getElementById('file-info-single');
+  document.getElementById('fi-icon').textContent = categoryIcon(data.category);
+  document.getElementById('fi-name').textContent = data.filename;
+  document.getElementById('fi-size').textContent = fmtSize(sizeBytes);
+  const badge = document.getElementById('fi-badge');
+  badge.textContent  = data.category;
+  badge.className    = `file-badge badge-${data.category}`;
+  document.getElementById('fi-fmt').textContent  = data.detected_format.toUpperCase();
+  info.classList.add('visible');
+}
+
+function renderSingleFormats(fmts) {
+  const grid = document.getElementById('format-grid-single');
+  grid.innerHTML = '';
+  if (!fmts.length) {
+    grid.innerHTML = '<div class="format-empty">No output formats available.</div>';
+    return;
+  }
+  fmts.forEach(f => {
+    const btn = document.createElement('button');
+    btn.className = 'format-chip';
+    btn.textContent = f.toUpperCase();
+    btn.onclick = () => selectSingleFormat(f, btn);
+    grid.appendChild(btn);
+  });
+}
+
+function selectSingleFormat(fmt, el) {
+  singleFormat = fmt;
+  document.querySelectorAll('#format-grid-single .format-chip').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('convert-btn-single').disabled = false;
+}
+
+async function convertSingle() {
+  if (!singleFileId || !singleFormat) return;
+  const btn = document.getElementById('convert-btn-single');
+  btn.disabled = true;
+  document.getElementById('progress-wrap-single').style.display = '';
+  clearStatus('status-single');
+
+  const fd = new FormData();
+  fd.append('file_id', singleFileId);
+  fd.append('target_format', singleFormat);
+  fd.append('quality', currentQuality);
+
+  try {
+    const res  = await fetch(`${API}/api/convert`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Conversion failed');
+
+    document.getElementById('progress-fill-single').style.width = '100%';
+
+    // Stash in history
+    addHistory({
+      type:     'single',
+      filename: data.output_filename,
+      from:     document.getElementById('fi-fmt').textContent,
+      to:       singleFormat.toUpperCase(),
+      quality:  currentQuality,
+      download_id: data.download_id,
+    });
+
+    showStatus('status-single', 'success',
+      `✓ Done! <a href="${API}/api/download/${data.download_id}" download="${data.output_filename}"
+         style="color:inherit;text-decoration:underline;margin-left:6px;">Download ${data.output_filename}</a>`);
+  } catch (err) {
+    showStatus('status-single', 'error', err.message);
+  } finally {
+    document.getElementById('progress-wrap-single').style.display = 'none';
+    document.getElementById('progress-fill-single').style.width = '0%';
+    btn.disabled = false;
+  }
+}
+
+function resetAll() {
+  // Clear single state
+  singleFileId = singleFormat = singleCategory = null;
+  singleFmts = [];
+  document.getElementById('file-info-single').classList.remove('visible');
+  document.getElementById('format-card-single').style.display = 'none';
+  document.getElementById('format-grid-single').innerHTML = '';
+  document.getElementById('convert-btn-single').disabled = true;
+  clearStatus('status-single');
+
+  // Clear bulk state
+  bulkFiles = [];
+  document.getElementById('bulk-file-list').innerHTML = '';
+  document.getElementById('bulk-list-card').style.display = 'none';
+  clearStatus('status-bulk');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ── BULK MODE ────────────────────────────────────────────────────────────
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+async function uploadBulk(files) {
+  const fd = new FormData();
+  files.forEach(f => fd.append('files', f));
+
+  showStatus('status-bulk', 'info', `Uploading ${files.length} file(s)…`);
+  try {
+    const res  = await fetch(`${API}/api/bulk-upload`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Upload failed');
+
+    // Merge results into bulkFiles
+    data.files.forEach(f => {
+      if (f.error) {
+        bulkFiles.push({ filename: f.filename, error: f.error, status: 'error' });
+      } else {
+        bulkFiles.push({
+          file_id:           f.file_id,
+          filename:          f.filename,
+          size:              f.size,
+          category:          f.category,
+          detected_format:   f.detected_format,
+          available_formats: f.available_formats || [],
+          target_format:     '',
+          status:            'pending',
+          error:             null,
+        });
+      }
+    });
+
+    clearStatus('status-bulk');
+    renderBulkList();
+    document.getElementById('bulk-list-card').style.display = '';
+  } catch (err) {
+    showStatus('status-bulk', 'error', err.message);
+  }
+}
+
+function renderBulkList() {
+  const list = document.getElementById('bulk-file-list');
+  list.innerHTML = '';
+
+  const good = bulkFiles.filter(f => !f.error);
+  document.getElementById('bulk-count-badge').textContent =
+    `${good.length} file${good.length !== 1 ? 's' : ''}`;
+
+  // Populate global format dropdown (union of all available_formats)
+  const allFmts = [...new Set(good.flatMap(f => f.available_formats))].sort();
+  const gfmt = document.getElementById('bulk-global-fmt');
+  gfmt.innerHTML = '<option value="">— pick format —</option>' +
+    allFmts.map(f => `<option value="${f}">${f.toUpperCase()}</option>`).join('');
+
+  bulkFiles.forEach((f, i) => renderBulkRow(f, i, list));
+}
+
+function renderBulkRow(f, i, container) {
+  const row = document.createElement('div');
+  row.className = `bulk-file-row ${f.status}`;
+  row.id = `bulk-row-${i}`;
+
+  if (f.error) {
+    row.innerHTML = `
+      <span class="bulk-file-icon">⚠</span>
+      <span class="bulk-file-name" style="color:var(--error);">${esc(f.filename)}</span>
+      <span style="font-size:10px;color:var(--error);flex:1;">${esc(f.error)}</span>
+    `;
+    container.appendChild(row);
+    return;
+  }
+
+  const fmtOptions = f.available_formats.map(fmt =>
+    `<option value="${fmt}" ${fmt === f.target_format ? 'selected' : ''}>${fmt.toUpperCase()}</option>`
+  ).join('');
+
+  row.innerHTML = `
+    <span class="bulk-file-icon">${categoryIcon(f.category)}</span>
+    <span class="bulk-file-name">${esc(f.filename)}</span>
+    <span class="bulk-file-size">${fmtSize(f.size)}</span>
+    <span class="bulk-file-cat"><span class="file-badge badge-${f.category}">${f.category}</span></span>
+    <span class="bulk-file-fmt">
+      <select onchange="setBulkFormat(${i}, this.value)">
+        <option value="">— format —</option>
+        ${fmtOptions}
+      </select>
+    </span>
+    <span class="bulk-file-status" id="bulk-status-${i}">${statusIcon(f.status)}</span>
+  `;
+
+  if (f.error && f.status === 'error') {
+    const note = document.createElement('div');
+    note.className = 'bulk-error-note';
+    note.textContent = f.error;
+    row.appendChild(note);
+  }
+
+  container.appendChild(row);
+}
+
+function setBulkFormat(i, fmt) {
+  bulkFiles[i].target_format = fmt;
+}
+
+function applyGlobalFormat() {
+  const fmt = document.getElementById('bulk-global-fmt').value;
+  if (!fmt) return;
+  bulkFiles.forEach((f, i) => {
+    if (!f.error && f.available_formats.includes(fmt)) {
+      f.target_format = fmt;
+      const sel = document.querySelector(`#bulk-row-${i} select`);
+      if (sel) sel.value = fmt;
+    }
+  });
+}
+
+function updateBulkRowStatus(i, status, errMsg) {
+  bulkFiles[i].status = status;
+  if (errMsg) bulkFiles[i].error = errMsg;
+
+  const row = document.getElementById(`bulk-row-${i}`);
+  if (row) {
+    row.className = `bulk-file-row ${status}`;
+  }
+  const si = document.getElementById(`bulk-status-${i}`);
+  if (si) si.innerHTML = statusIcon(status);
+}
+
+async function convertBulk() {
+  const eligible = bulkFiles.filter(f => !f.error && f.target_format);
+
+  if (!eligible.length) {
+    showStatus('status-bulk', 'error', 'Select an output format for at least one file.');
+    return;
+  }
+
+  const missing = bulkFiles.filter(f => !f.error && !f.target_format);
+  if (missing.length) {
+    showStatus('status-bulk', 'info',
+      `${missing.length} file(s) have no format selected and will be skipped.`);
+  } else {
+    clearStatus('status-bulk');
+  }
+
+  const btn = document.getElementById('bulk-convert-btn');
+  btn.disabled = true;
+  btn.textContent = 'Converting…';
+
+  // Mark eligible as converting
+  bulkFiles.forEach((f, i) => {
+    if (!f.error && f.target_format) updateBulkRowStatus(i, 'converting', null);
+  });
+
+  const conversions = eligible.map(f => ({
+    file_id:       f.file_id,
+    target_format: f.target_format,
+  }));
+
+  const fd = new FormData();
+  fd.append('conversions', JSON.stringify(conversions));
+  fd.append('quality', currentQuality);
+
+  try {
+    const res  = await fetch(`${API}/api/bulk-convert`, { method: 'POST', body: fd });
+    const data = await res.json();
+
+    if (!res.ok) {
+      // All failed
+      eligible.forEach((f, _) => {
+        const i = bulkFiles.indexOf(f);
+        updateBulkRowStatus(i, 'error', data.detail || 'Failed');
+      });
+      showStatus('status-bulk', 'error', data.detail || 'Bulk conversion failed.');
+      return;
+    }
+
+    // Mark errors from partial failures
+    if (data.errors && data.errors.length) {
+      data.errors.forEach(e => {
+        const i = bulkFiles.findIndex(f => f.file_id === e.file_id);
+        if (i >= 0) updateBulkRowStatus(i, 'error', e.error);
+      });
+    }
+
+    // Mark successes
+    eligible.forEach(f => {
+      const i = bulkFiles.indexOf(f);
+      const wasError = data.errors && data.errors.some(e => e.file_id === f.file_id);
+      if (!wasError) updateBulkRowStatus(i, 'done', null);
+    });
+
+    // Add to history
+    addHistory({
+      type:        'bulk',
+      count:       data.count,
+      errors:      (data.errors || []).length,
+      quality:     currentQuality,
+      download_id: data.download_id,
+    });
+
+    const dlUrl = `${API}/api/download/${data.download_id}`;
+    showStatus('status-bulk', 'success',
+      `✓ ${data.count} file(s) converted.` +
+      (data.errors && data.errors.length ? ` (${data.errors.length} failed)` : '') +
+      ` <a href="${dlUrl}" download="converted.zip" style="color:inherit;text-decoration:underline;margin-left:6px;">
+         ↓ Download ZIP
+       </a>`);
+  } catch (err) {
+    showStatus('status-bulk', 'error', err.message);
+    eligible.forEach(f => {
+      const i = bulkFiles.indexOf(f);
+      updateBulkRowStatus(i, 'error', err.message);
+    });
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> Convert All`;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   History
+   ═══════════════════════════════════════════════════════════════════════════ */
+function addHistory(entry) {
+  history.unshift({ ...entry, ts: Date.now() });
+  if (history.length > 50) history.pop();
+}
+
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  if (!history.length) {
+    list.innerHTML = '<div class="history-empty">No conversions yet.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  history.forEach(h => {
+    const item = document.createElement('div');
+    item.className = 'history-item';
+
+    let icon, nameHtml, detailHtml, actionHtml;
+
+    if (h.type === 'single') {
+      icon = '📄';
+      nameHtml = esc(h.filename);
+      detailHtml = `${h.from} → ${h.to} &nbsp;·&nbsp; quality: ${h.quality} &nbsp;·&nbsp; ${timeAgo(h.ts)}`;
+      actionHtml = `<a class="history-dl" href="${API}/api/download/${h.download_id}" download="${h.filename}">↓ Download</a>`;
+    } else {
+      icon = '📦';
+      nameHtml = `converted.zip`;
+      detailHtml = `${h.count} file(s) converted${h.errors ? ` (${h.errors} failed)` : ''} &nbsp;·&nbsp; quality: ${h.quality} &nbsp;·&nbsp; ${timeAgo(h.ts)}`;
+      actionHtml = `<a class="history-dl" href="${API}/api/download/${h.download_id}" download="converted.zip">↓ Download ZIP</a>`;
+    }
+
+    item.innerHTML = `
+      <span class="history-icon">${icon}</span>
+      <div class="history-meta">
+        <div class="history-name">${nameHtml}</div>
+        <div class="history-detail">${detailHtml}</div>
+      </div>
+      <div class="history-action">${actionHtml}</div>
+    `;
+    list.appendChild(item);
+  });
+}
+
+function clearHistory() {
+  history = [];
+  renderHistory();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Helpers
+   ═══════════════════════════════════════════════════════════════════════════ */
+function showStatus(id, type, html) {
+  const el = document.getElementById(id);
+  el.className = `status-msg visible ${type}`;
+  el.innerHTML = html;
+}
+function clearStatus(id) {
+  const el = document.getElementById(id);
+  el.className = 'status-msg';
+  el.innerHTML = '';
+}
+
+function statusIcon(status) {
+  if (status === 'pending')    return '<span class="status-pending">○</span>';
+  if (status === 'converting') return '<span class="status-converting">↻</span>';
+  if (status === 'done')       return '<span class="status-done">✓</span>';
+  if (status === 'error')      return '<span class="status-error">✕</span>';
+  return '';
+}
+
+function categoryIcon(cat) {
+  const icons = { document:'📄', image:'🖼', audio:'🎵', video:'🎬', data:'📊', archive:'📦' };
+  return icons[cat] || '📄';
+}
+
+function fmtSize(bytes) {
+  if (!bytes) return '—';
+  if (bytes < 1024)       return `${bytes} B`;
+  if (bytes < 1048576)    return `${(bytes/1024).toFixed(1)} KB`;
+  if (bytes < 1073741824) return `${(bytes/1048576).toFixed(1)} MB`;
+  return `${(bytes/1073741824).toFixed(2)} GB`;
+}
+
+function timeAgo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  return `${Math.floor(s/3600)}h ago`;
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+</script>
+</body>
+</html>

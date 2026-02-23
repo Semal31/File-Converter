@@ -1,0 +1,28 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9
+
+# Documents
+pypandoc>=1.13
+python-docx>=1.1.0
+weasyprint>=61.0
+markdown>=3.5.2
+
+# Images
+Pillow>=10.2.0
+cairosvg>=2.7.1
+
+# Audio
+pydub>=0.25.1
+
+# Video
+ffmpeg-python>=0.2.0
+
+# Data / Spreadsheet
+pandas>=2.2.0
+openpyxl>=3.1.2
+PyYAML>=6.0.1
+lxml>=5.1.0
+
+# Archives
+py7zr>=0.20.8
