@@ -1,7 +1,8 @@
 FROM python:3.12-slim
 
 # System dependencies for all converters
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN rm -rf /var/lib/apt/lists/* && \
+    apt-get update && apt-get install -y --no-install-recommends \
     pandoc \
     ffmpeg \
     libcairo2 \
