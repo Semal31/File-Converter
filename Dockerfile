@@ -1,7 +1,8 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 # System dependencies for all converters
-RUN rm -rf /var/lib/apt/lists/* && \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     pandoc \
     ffmpeg \
@@ -12,8 +13,7 @@ RUN rm -rf /var/lib/apt/lists/* && \
     libffi-dev \
     shared-mime-info \
     fonts-liberation \
-    curl \
- && rm -rf /var/lib/apt/lists/*
+    curl
 
 WORKDIR /app
 
