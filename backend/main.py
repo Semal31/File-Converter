@@ -418,40 +418,50 @@ async def convert(
     target_format: str = Form(...),
     quality:       str = Form("original"),
 ) -> dict:
-    """Convert a previously uploaded file to *target_format*.
-
-    Args:
-        file_id:       UUID returned by /api/upload.
-        target_format: Desired output format (e.g. 'pdf', 'mp3').
-        quality:       'original' (default) | 'high' | 'medium' | 'low' | 'lossless'.
-                       Only affects lossy formats (audio/video); ignored otherwise.
-
-    Returns download_id to pass to /api/download/{download_id}.
-    """
+    """Start an async conversion job. Returns job_id for SSE progress tracking."""
     if quality not in _VALID_QUALITY:
         raise HTTPException(
             status_code=400,
             detail={"message": f"Invalid quality '{quality}'.", "detail": None},
         )
 
-    try:
-        out_path, out_fn = await _do_one_conversion(file_id, target_format, quality)
-    except ValueError as exc:
-        msg, raw = _classify_exc(exc)
-        raise HTTPException(status_code=400, detail={"message": msg, "detail": raw}) from exc
-    except Exception as exc:
-        log.exception("Conversion failed: file_id=%s target=%s", file_id, target_format)
-        msg, raw = _classify_exc(exc)
-        raise HTTPException(status_code=500, detail={"message": msg, "detail": raw}) from exc
+    # Validate input synchronously (fast — dict lookups only)
+    meta = UPLOADS.get(file_id)
+    if meta is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": f"Upload '{file_id}' not found or expired.", "detail": None},
+        )
 
-    download_id = str(uuid.uuid4())
-    DOWNLOADS[download_id] = {
-        "path":       str(out_path),
-        "filename":   out_fn,
+    target_format = target_format.lower().strip(". ")
+    available = get_available_formats(meta["format"], meta["category"])
+    if target_format not in available:
+        targets = ", ".join(t.upper() for t in available)
+        raise HTTPException(
+            status_code=400,
+            detail={"message": f"Cannot convert {meta['format'].upper()} to {target_format.upper()}. Available targets: {targets}.", "detail": None},
+        )
+
+    input_path = Path(meta["path"])
+    if not input_path.exists():
+        raise HTTPException(
+            status_code=400,
+            detail={"message": f"Upload '{file_id}' file is no longer on disk.", "detail": None},
+        )
+
+    # Register job and fire
+    job_id = str(uuid.uuid4())
+    JOBS[job_id] = {
+        "state": "running",
+        "percent": 0,
+        "download_id": None,
+        "message": None,
+        "detail": None,
         "expires_at": time.time() + FILE_TTL,
     }
+    _spawn_job_task(_run_job(job_id, file_id, target_format, quality))
 
-    return {"download_id": download_id, "output_filename": out_fn, "status": "ready"}
+    return {"job_id": job_id}
 
 
 # ── Bulk upload / convert ─────────────────────────────────────────────────────
@@ -483,14 +493,10 @@ async def bulk_convert(
     conversions: str = Form(...),
     quality:     str = Form("original"),
 ) -> dict:
-    """Convert multiple uploaded files and bundle results into a ZIP.
+    """Start async conversion jobs for multiple files.
 
-    Args:
-        conversions: JSON array of objects: [{file_id, target_format}, ...]
-        quality:     Applied to all conversions. Same values as /api/convert.
-
-    Returns download_id pointing to the resulting ZIP archive.
-    The response also contains per-file status and any errors.
+    Returns per-file results: each item is either {file_id, job_id} or {file_id, error}.
+    Validates ALL items upfront before spawning any jobs.
     """
     if quality not in _VALID_QUALITY:
         raise HTTPException(
@@ -501,68 +507,58 @@ async def bulk_convert(
     try:
         items: list[dict] = _json.loads(conversions)
     except _json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail={"message": f"Invalid JSON in 'conversions': {exc}", "detail": None}) from exc
+        raise HTTPException(
+            status_code=400,
+            detail={"message": f"Invalid JSON in 'conversions': {exc}", "detail": None},
+        ) from exc
 
     if not isinstance(items, list) or not items:
-        raise HTTPException(status_code=400, detail={"message": "'conversions' must be a non-empty JSON array.", "detail": None})
-
-    # Run all conversions concurrently — each uses run_in_executor internally
-    tasks = [
-        _do_one_conversion(item.get("file_id", ""), item.get("target_format", ""), quality)
-        for item in items
-    ]
-    raw_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    # Separate successes from failures
-    successes: list[tuple[Path, str]] = []
-    errors: list[dict] = []
-
-    for i, result in enumerate(raw_results):
-        item = items[i]
-        if isinstance(result, Exception):
-            msg, raw = _classify_exc(result)
-            errors.append({
-                "file_id":       item.get("file_id"),
-                "target_format": item.get("target_format"),
-                "message":       msg,
-                "detail":        raw,
-            })
-            log.warning("Bulk conversion failed for file_id=%s: %s", item.get("file_id"), result)
-        else:
-            successes.append(result)
-
-    if not successes:
         raise HTTPException(
-            status_code=422,
-            detail={"message": f"All {len(errors)} conversion(s) failed.", "detail": None},
+            status_code=400,
+            detail={"message": "'conversions' must be a non-empty JSON array.", "detail": None},
         )
 
-    # Bundle all successful outputs into a single ZIP
-    zip_download_id = str(uuid.uuid4())
-    zip_path = TEMP_DIR / f"{zip_download_id}_converted.zip"
+    # --- PASS 1: Validate all items upfront (no jobs spawned yet) ---
+    validated = []   # list of (fid, tfmt, meta) tuples for items that passed
+    errors = []      # list of {file_id, error} dicts for items that failed
+    for item in items:
+        fid = item.get("file_id", "")
+        tfmt = item.get("target_format", "").lower().strip(". ")
 
-    with _zipfile.ZipFile(zip_path, "w", _zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
-        for out_path, out_fn in successes:
-            zf.write(out_path, arcname=out_fn)
-            out_path.unlink(missing_ok=True)  # remove individual file after packing
+        meta = UPLOADS.get(fid)
+        if meta is None:
+            errors.append({"file_id": fid, "error": {"message": f"Upload '{fid}' not found or expired.", "detail": None}})
+            continue
 
-    DOWNLOADS[zip_download_id] = {
-        "path":       str(zip_path),
-        "filename":   "converted.zip",
-        "expires_at": time.time() + FILE_TTL,
-    }
+        available = get_available_formats(meta["format"], meta["category"])
+        if tfmt not in available:
+            targets = ", ".join(t.upper() for t in available)
+            errors.append({"file_id": fid, "error": {"message": f"Cannot convert {meta['format'].upper()} to {tfmt.upper()}. Available targets: {targets}.", "detail": None}})
+            continue
 
-    log.info(
-        "Bulk convert: %d succeeded, %d failed → converted.zip",
-        len(successes), len(errors),
-    )
+        input_path = Path(meta["path"])
+        if not input_path.exists():
+            errors.append({"file_id": fid, "error": {"message": f"Upload '{fid}' file is no longer on disk.", "detail": None}})
+            continue
 
-    return {
-        "download_id":     zip_download_id,
-        "output_filename": "converted.zip",
-        "count":           len(successes),
-        "errors":          errors,
-    }
+        validated.append((fid, tfmt, meta))
+
+    # --- PASS 2: Spawn jobs only for validated items ---
+    results = list(errors)  # start with error entries
+    for fid, tfmt, meta in validated:
+        job_id = str(uuid.uuid4())
+        JOBS[job_id] = {
+            "state": "running",
+            "percent": 0,
+            "download_id": None,
+            "message": None,
+            "detail": None,
+            "expires_at": time.time() + FILE_TTL,
+        }
+        _spawn_job_task(_run_job(job_id, fid, tfmt, quality))
+        results.append({"file_id": fid, "job_id": job_id})
+
+    return {"results": results}
 
 
 # ── Download (shared by single and bulk) ─────────────────────────────────────
