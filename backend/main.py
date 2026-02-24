@@ -1,12 +1,13 @@
-"""File Converter — FastAPI backend.
+"""File Converter -- FastAPI backend.
 
 Endpoints:
-    GET  /api/health                     → health check
-    POST /api/upload                     → upload a single file, get format info
-    POST /api/bulk-upload                → upload multiple files at once
-    POST /api/convert                    → convert a single uploaded file
-    POST /api/bulk-convert               → convert multiple files, download as ZIP
-    GET  /api/download/{download_id}     → stream converted file (or ZIP)
+    GET  /api/health                     -> health check
+    POST /api/upload                     -> upload a single file, get format info
+    POST /api/bulk-upload                -> upload multiple files at once
+    POST /api/convert                    -> start async conversion, get job_id
+    POST /api/bulk-convert               -> start async conversions, get per-file job_ids
+    GET  /api/progress/{job_id}          -> SSE stream of job progress events
+    GET  /api/download/{download_id}     -> stream converted file
 """
 
 import asyncio
@@ -17,7 +18,6 @@ import shutil
 import tempfile
 import time
 import uuid
-import zipfile as _zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
@@ -26,6 +26,7 @@ from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sse_starlette import EventSourceResponse
 
 from converters import convert_file, detect_format, get_available_formats
 
@@ -37,6 +38,17 @@ log = logging.getLogger("fc.main")
 
 UPLOADS: dict[str, dict] = {}    # file_id  → {path, filename, format, category, expires_at}
 DOWNLOADS: dict[str, dict] = {}  # download_id → {path, filename, expires_at}
+JOBS: dict[str, dict] = {}  # job_id → {state, percent, download_id, message, detail, expires_at}
+
+_RUNNING_TASKS: set[asyncio.Task] = set()
+
+
+def _spawn_job_task(coro) -> asyncio.Task:
+    """Fire-and-forget with reference tracking to prevent GC."""
+    task = asyncio.create_task(coro)
+    _RUNNING_TASKS.add(task)
+    task.add_done_callback(_RUNNING_TASKS.discard)
+    return task
 
 TEMP_DIR = Path(tempfile.mkdtemp(prefix="fc_"))
 FILE_TTL = 3600  # 1 hour
@@ -108,7 +120,7 @@ async def _cleanup_loop() -> None:
 def _purge_expired() -> None:
     now = time.time()
     removed = 0
-    for store in (UPLOADS, DOWNLOADS):
+    for store in (UPLOADS, DOWNLOADS, JOBS):
         expired_keys = [k for k, v in store.items() if v.get("expires_at", 0) < now]
         for k in expired_keys:
             p = store[k].get("path")
@@ -259,6 +271,7 @@ async def _do_one_conversion(
     file_id: str,
     target_format: str,
     quality: str,
+    progress_callback=None,
 ) -> tuple[Path, str]:
     """Convert one uploaded file. Returns (output_path, output_filename).
 
@@ -294,10 +307,53 @@ async def _do_one_conversion(
         category=meta["category"],
         output_path=out_path,
         quality=quality,
+        progress_callback=progress_callback,
     )
 
     log.info("Converted '%s' %s → %s", meta["filename"], meta["format"], target_format)
     return out_path, out_fn
+
+
+async def _run_job(job_id: str, file_id: str, target_format: str, quality: str) -> None:
+    """Background job: run conversion, update JOBS dict on completion or error."""
+    def _progress(pct: float) -> None:
+        job = JOBS.get(job_id)
+        if job:
+            job["percent"] = int(min(99, pct))  # hold at 99 until truly done
+
+    try:
+        out_path, out_fn = await _do_one_conversion(
+            file_id, target_format, quality, progress_callback=_progress
+        )
+        download_id = str(uuid.uuid4())
+        DOWNLOADS[download_id] = {
+            "path": str(out_path),
+            "filename": out_fn,
+            "expires_at": time.time() + FILE_TTL,
+        }
+        JOBS[job_id].update({
+            "state": "done",
+            "percent": 100,
+            "download_id": download_id,
+            "expires_at": time.time() + FILE_TTL,
+        })
+        log.info("Job %s done -> download_id=%s", job_id, download_id)
+    except Exception as exc:
+        msg, raw = _classify_exc(exc)
+        log.exception("Job %s failed", job_id)
+        JOBS[job_id].update({
+            "state": "error",
+            "message": msg,
+            "detail": raw,
+            "expires_at": time.time() + FILE_TTL,
+        })
+
+
+def _terminal_payload(job: dict) -> dict:
+    """Build the SSE payload for a done or error event."""
+    if job["state"] == "done":
+        return {"state": "done", "percent": 100, "download_id": job["download_id"]}
+    return {"state": "error", "message": job["message"], "detail": job["detail"]}
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -307,6 +363,42 @@ async def _do_one_conversion(
 async def health() -> dict:
     """Return service health and version."""
     return {"status": "ok", "version": "1.0.0"}
+
+
+@app.get("/api/progress/{job_id}", tags=["progress"])
+async def progress(job_id: str, request: Request):
+    """Stream SSE events for a conversion job."""
+    job = JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail={"message": f"Job '{job_id}' not found.", "detail": None})
+
+    async def _stream():
+        # Late-connect: if already terminal, send immediately and close
+        job = JOBS.get(job_id)
+        if job and job["state"] in ("done", "error"):
+            yield {"data": _json.dumps(_terminal_payload(job))}
+            return
+
+        # Poll at 1-second intervals
+        last_pct = -1
+        while True:
+            if await request.is_disconnected():
+                return
+            job = JOBS.get(job_id, {})
+            state = job.get("state", "error")
+            pct = job.get("percent", 0)
+
+            if state in ("done", "error"):
+                yield {"data": _json.dumps(_terminal_payload(job))}
+                return
+
+            if pct != last_pct:
+                yield {"data": _json.dumps({"state": "running", "percent": pct})}
+                last_pct = pct
+
+            await asyncio.sleep(1)
+
+    return EventSourceResponse(_stream(), ping=15)
 
 
 # ── Single-file upload / convert / download ───────────────────────────────────
