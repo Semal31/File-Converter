@@ -871,7 +871,11 @@ async function uploadSingle(file) {
   try {
     const res  = await fetch(`${API}/api/upload`, { method: 'POST', body: fd });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Upload failed');
+    if (!res.ok) {
+      const err = new Error((data && data.message) || 'Upload failed');
+      err.rawDetail = (data && data.detail) || null;
+      throw err;
+    }
 
     singleFileId   = data.file_id;
     singleFmts     = data.available_formats || [];
@@ -883,7 +887,7 @@ async function uploadSingle(file) {
     clearStatus('status-single');
   } catch (err) {
     document.getElementById('format-card-single').style.display = 'none';
-    showStatus('status-single', 'error', err.message);
+    showStatus('status-single', 'error', buildErrorHtml(err.message, err.rawDetail));
   }
 }
 
@@ -937,7 +941,11 @@ async function convertSingle() {
   try {
     const res  = await fetch(`${API}/api/convert`, { method: 'POST', body: fd });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Conversion failed');
+    if (!res.ok) {
+      const err = new Error((data && data.message) || 'Conversion failed');
+      err.rawDetail = (data && data.detail) || null;
+      throw err;
+    }
 
     document.getElementById('progress-fill-single').style.width = '100%';
 
@@ -955,7 +963,7 @@ async function convertSingle() {
       `✓ Done! <a href="${API}/api/download/${data.download_id}" download="${data.output_filename}"
          style="color:inherit;text-decoration:underline;margin-left:6px;">Download ${data.output_filename}</a>`);
   } catch (err) {
-    showStatus('status-single', 'error', err.message);
+    showStatus('status-single', 'error', buildErrorHtml(err.message, err.rawDetail || null));
   } finally {
     document.getElementById('progress-wrap-single').style.display = 'none';
     document.getElementById('progress-fill-single').style.width = '0%';
@@ -992,7 +1000,11 @@ async function uploadBulk(files) {
   try {
     const res  = await fetch(`${API}/api/bulk-upload`, { method: 'POST', body: fd });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Upload failed');
+    if (!res.ok) {
+      const err = new Error((data && data.message) || 'Upload failed');
+      err.rawDetail = (data && data.detail) || null;
+      throw err;
+    }
 
     // Merge results into bulkFiles
     data.files.forEach(f => {
@@ -1017,7 +1029,7 @@ async function uploadBulk(files) {
     renderBulkList();
     document.getElementById('bulk-list-card').style.display = '';
   } catch (err) {
-    showStatus('status-bulk', 'error', err.message);
+    showStatus('status-bulk', 'error', buildErrorHtml(err.message, err.rawDetail || null));
   }
 }
 
@@ -1074,7 +1086,7 @@ function renderBulkRow(f, i, container) {
   if (f.error && f.status === 'error') {
     const note = document.createElement('div');
     note.className = 'bulk-error-note';
-    note.textContent = f.error;
+    note.innerHTML = buildErrorHtml(f.error, f.errorDetail || null);
     row.appendChild(note);
   }
 
@@ -1097,9 +1109,10 @@ function applyGlobalFormat() {
   });
 }
 
-function updateBulkRowStatus(i, status, errMsg) {
+function updateBulkRowStatus(i, status, errMsg, errDetail) {
   bulkFiles[i].status = status;
   if (errMsg) bulkFiles[i].error = errMsg;
+  if (errDetail !== undefined) bulkFiles[i].errorDetail = errDetail;
 
   const row = document.getElementById(`bulk-row-${i}`);
   if (row) {
@@ -1107,6 +1120,18 @@ function updateBulkRowStatus(i, status, errMsg) {
   }
   const si = document.getElementById(`bulk-status-${i}`);
   if (si) si.innerHTML = statusIcon(status);
+
+  // Remove any existing error note
+  const oldNote = row && row.querySelector('.bulk-error-note');
+  if (oldNote) oldNote.remove();
+
+  // Add error note if there's an error message
+  if (row && errMsg && status === 'error') {
+    const note = document.createElement('div');
+    note.className = 'bulk-error-note';
+    note.innerHTML = buildErrorHtml(errMsg, errDetail || null);
+    row.appendChild(note);
+  }
 }
 
 async function convertBulk() {
@@ -1149,11 +1174,12 @@ async function convertBulk() {
 
     if (!res.ok) {
       // All failed
+      const allFailMsg = (data && data.message) || 'Bulk conversion failed.';
       eligible.forEach((f, _) => {
         const i = bulkFiles.indexOf(f);
-        updateBulkRowStatus(i, 'error', data.detail || 'Failed');
+        updateBulkRowStatus(i, 'error', allFailMsg, null);
       });
-      showStatus('status-bulk', 'error', data.detail || 'Bulk conversion failed.');
+      showStatus('status-bulk', 'error', buildErrorHtml(allFailMsg, (data && data.detail) || null));
       return;
     }
 
@@ -1161,7 +1187,7 @@ async function convertBulk() {
     if (data.errors && data.errors.length) {
       data.errors.forEach(e => {
         const i = bulkFiles.findIndex(f => f.file_id === e.file_id);
-        if (i >= 0) updateBulkRowStatus(i, 'error', e.error);
+        if (i >= 0) updateBulkRowStatus(i, 'error', e.message || 'Failed', e.detail || null);
       });
     }
 
@@ -1182,17 +1208,21 @@ async function convertBulk() {
     });
 
     const dlUrl = `${API}/api/download/${data.download_id}`;
+    const total = eligible.length;
+    const failed = (data.errors && data.errors.length) || 0;
+    const summaryText = failed
+      ? `${data.count} of ${total} files converted. ${failed} failed.`
+      : `${data.count} file(s) converted.`;
     showStatus('status-bulk', 'success',
-      `✓ ${data.count} file(s) converted.` +
-      (data.errors && data.errors.length ? ` (${data.errors.length} failed)` : '') +
+      `✓ ${summaryText}` +
       ` <a href="${dlUrl}" download="converted.zip" style="color:inherit;text-decoration:underline;margin-left:6px;">
          ↓ Download ZIP
        </a>`);
   } catch (err) {
-    showStatus('status-bulk', 'error', err.message);
+    showStatus('status-bulk', 'error', buildErrorHtml(err.message, err.rawDetail || null));
     eligible.forEach(f => {
       const i = bulkFiles.indexOf(f);
-      updateBulkRowStatus(i, 'error', err.message);
+      updateBulkRowStatus(i, 'error', err.message, null);
     });
   } finally {
     btn.disabled = false;
@@ -1297,6 +1327,18 @@ function esc(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function buildErrorHtml(message, rawDetail) {
+  let html = esc(message);
+  if (rawDetail) {
+    html += `<details style="margin-top:6px;font-size:10px;color:var(--text-2);">` +
+            `<summary style="cursor:pointer;user-select:none;">Show details</summary>` +
+            `<pre style="margin-top:4px;white-space:pre-wrap;word-break:break-all;` +
+            `max-height:200px;overflow-y:auto;">${esc(rawDetail)}</pre>` +
+            `</details>`;
+  }
+  return html;
 }
 
 </script>
