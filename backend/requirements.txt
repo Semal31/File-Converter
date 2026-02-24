@@ -26,3 +26,7 @@ lxml>=5.1.0
 
 # Archives
 py7zr>=0.20.8
+
+# Progress
+sse-starlette>=2.1.0
+ffmpeg-progress-yield>=1.1.2
