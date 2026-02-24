@@ -22,9 +22,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from converters import convert_file, detect_format, get_available_formats
@@ -136,7 +136,85 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.exception_handler(HTTPException)
+async def structured_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """Normalize all HTTP errors to {message, detail} shape."""
+    if isinstance(exc.detail, dict) and "message" in exc.detail:
+        body = exc.detail
+    else:
+        body = {"message": str(exc.detail), "detail": None}
+    return JSONResponse(status_code=exc.status_code, content=body)
+
+
 # ── Internal helpers ──────────────────────────────────────────────────────────
+
+
+def _classify_exc(exc: Exception) -> tuple[str, str | None]:
+    """Map a converter exception to (user_message, raw_detail).
+
+    user_message: plain English, safe to show in the UI.
+    raw_detail:   technical string for "Show details" toggle, or None.
+    """
+    import ffmpeg as _ffmpeg
+    from pydub.exceptions import CouldntDecodeError, CouldntEncodeError
+
+    raw = str(exc)
+
+    # ffmpeg-python: .stderr is bytes | None
+    if isinstance(exc, _ffmpeg.Error):
+        stderr_bytes = exc.stderr or b""
+        stderr = stderr_bytes.decode("utf-8", errors="replace").strip()
+        lines = [
+            l.strip() for l in stderr.splitlines()
+            if l.strip() and not l.lstrip().startswith("ffmpeg version")
+        ]
+        hint = lines[-1] if lines else "ffmpeg processing failed"
+        return f"Conversion failed: {hint}", stderr
+
+    # pydub wraps ffmpeg decode/encode — str(exc) leaks subprocess output
+    if isinstance(exc, (CouldntDecodeError, CouldntEncodeError)):
+        action = "decode" if isinstance(exc, CouldntDecodeError) else "encode"
+        return (
+            f"Audio {action} failed. The file may be corrupt or use an unsupported codec.",
+            raw,
+        )
+
+    # pypandoc raises RuntimeError with pandoc stderr embedded in str(exc)
+    if isinstance(exc, RuntimeError) and "pandoc" in raw.lower():
+        return (
+            "Document conversion failed. The file may be malformed or contain unsupported features.",
+            raw,
+        )
+
+    # Pillow image read failure (Pillow >= 7.2, project requires >= 10.2)
+    try:
+        from PIL import UnidentifiedImageError
+        if isinstance(exc, UnidentifiedImageError):
+            return "Image format not recognized. The file may be corrupt.", raw
+    except ImportError:
+        pass
+
+    # pandas: malformed tabular data
+    try:
+        import pandas as pd
+        if isinstance(exc, pd.errors.ParserError):
+            return "Data file could not be parsed. Check that the file is well-formed.", raw
+        if isinstance(exc, pd.errors.EmptyDataError):
+            return "Data file is empty.", raw
+    except ImportError:
+        pass
+
+    # ValueError from converters: messages already written as user-facing strings
+    if isinstance(exc, ValueError):
+        return raw, None
+
+    # OSError: disk full, file permission error
+    if isinstance(exc, OSError):
+        return "File I/O error during conversion.", raw
+
+    # Catch-all
+    return "Conversion failed due to an unexpected error.", raw
 
 
 async def _store_upload(file: UploadFile) -> dict:
