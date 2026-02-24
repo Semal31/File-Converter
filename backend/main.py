@@ -225,7 +225,7 @@ async def _store_upload(file: UploadFile) -> dict:
     try:
         fmt, category = detect_format(filename, file.content_type)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail={"message": str(exc), "detail": None}) from exc
 
     file_id = str(uuid.uuid4())
     dest    = TEMP_DIR / f"{file_id}_{filename}"
@@ -233,7 +233,7 @@ async def _store_upload(file: UploadFile) -> dict:
     try:
         dest.write_bytes(content)
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to store upload: {exc}") from exc
+        raise HTTPException(status_code=500, detail={"message": "Failed to store upload.", "detail": str(exc)}) from exc
 
     meta = {
         "path":       str(dest),
@@ -275,9 +275,10 @@ async def _do_one_conversion(
     target_format = target_format.lower().strip(". ")
     available = get_available_formats(meta["format"], meta["category"])
     if target_format not in available:
+        targets = ", ".join(available)
         raise ValueError(
-            f"Cannot convert '{meta['format']}' to '{target_format}'. "
-            f"Available: {available}"
+            f"Cannot convert {meta['format'].upper()} to {target_format.upper()}. "
+            f"Available targets: {targets}."
         )
 
     stem    = Path(meta["filename"]).stem
@@ -338,16 +339,18 @@ async def convert(
     if quality not in _VALID_QUALITY:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid quality '{quality}'. Valid values: {sorted(_VALID_QUALITY)}",
+            detail={"message": f"Invalid quality '{quality}'.", "detail": None},
         )
 
     try:
         out_path, out_fn = await _do_one_conversion(file_id, target_format, quality)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        msg, raw = _classify_exc(exc)
+        raise HTTPException(status_code=400, detail={"message": msg, "detail": raw}) from exc
     except Exception as exc:
         log.exception("Conversion failed: file_id=%s target=%s", file_id, target_format)
-        raise HTTPException(status_code=500, detail=f"Conversion failed: {exc}") from exc
+        msg, raw = _classify_exc(exc)
+        raise HTTPException(status_code=500, detail={"message": msg, "detail": raw}) from exc
 
     download_id = str(uuid.uuid4())
     DOWNLOADS[download_id] = {
@@ -374,9 +377,10 @@ async def bulk_upload(files: List[UploadFile] = File(...)) -> dict:
         try:
             results.append(await _store_upload(f))
         except HTTPException as exc:
+            err_detail = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail), "detail": None}
             results.append({
                 "filename": f.filename or "unknown",
-                "error":    exc.detail,
+                "error":    err_detail.get("message", str(exc.detail)),
             })
 
     return {"files": results, "count": len(results)}
@@ -399,16 +403,16 @@ async def bulk_convert(
     if quality not in _VALID_QUALITY:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid quality '{quality}'. Valid values: {sorted(_VALID_QUALITY)}",
+            detail={"message": f"Invalid quality '{quality}'.", "detail": None},
         )
 
     try:
         items: list[dict] = _json.loads(conversions)
     except _json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON in 'conversions': {exc}") from exc
+        raise HTTPException(status_code=400, detail={"message": f"Invalid JSON in 'conversions': {exc}", "detail": None}) from exc
 
     if not isinstance(items, list) or not items:
-        raise HTTPException(status_code=400, detail="'conversions' must be a non-empty JSON array.")
+        raise HTTPException(status_code=400, detail={"message": "'conversions' must be a non-empty JSON array.", "detail": None})
 
     # Run all conversions concurrently — each uses run_in_executor internally
     tasks = [
@@ -424,10 +428,12 @@ async def bulk_convert(
     for i, result in enumerate(raw_results):
         item = items[i]
         if isinstance(result, Exception):
+            msg, raw = _classify_exc(result)
             errors.append({
                 "file_id":       item.get("file_id"),
                 "target_format": item.get("target_format"),
-                "error":         str(result),
+                "message":       msg,
+                "detail":        raw,
             })
             log.warning("Bulk conversion failed for file_id=%s: %s", item.get("file_id"), result)
         else:
@@ -436,7 +442,7 @@ async def bulk_convert(
     if not successes:
         raise HTTPException(
             status_code=422,
-            detail=f"All {len(errors)} conversion(s) failed. Errors: {errors}",
+            detail={"message": f"All {len(errors)} conversion(s) failed.", "detail": None},
         )
 
     # Bundle all successful outputs into a single ZIP
@@ -474,12 +480,12 @@ async def download(download_id: str, background_tasks: BackgroundTasks) -> FileR
     """Stream the converted file (or ZIP) to the client, then clean it up."""
     dl = DOWNLOADS.get(download_id)
     if dl is None:
-        raise HTTPException(status_code=404, detail="Download not found or already consumed.")
+        raise HTTPException(status_code=404, detail={"message": "Download not found or already consumed.", "detail": None})
 
     out_path = Path(dl["path"])
     if not out_path.exists():
         DOWNLOADS.pop(download_id, None)
-        raise HTTPException(status_code=410, detail="File is no longer available.")
+        raise HTTPException(status_code=410, detail={"message": "File is no longer available.", "detail": None})
 
     def _cleanup() -> None:
         out_path.unlink(missing_ok=True)

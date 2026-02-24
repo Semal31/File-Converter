@@ -58,10 +58,7 @@ def detect_format(filename: str, mime_type: str | None = None) -> tuple[str, str
 
     entry = _EXT_MAP.get(ext)
     if entry is None:
-        raise ValueError(
-            f"Unsupported format '.{ext}'. "
-            f"Supported extensions: {', '.join(sorted(_EXT_MAP))}."
-        )
+        raise ValueError(f"'.{ext}' is not a supported format.")
     return entry
 
 
