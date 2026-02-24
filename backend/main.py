@@ -12,6 +12,7 @@ Endpoints:
 import asyncio
 import json as _json
 import logging
+import os
 import shutil
 import tempfile
 import time
@@ -44,12 +45,49 @@ CLEANUP_INTERVAL = 300  # 5 minutes
 # Valid quality values accepted by all lossy converters
 _VALID_QUALITY = {"original", "high", "medium", "low", "lossless"}
 
+# Binaries that must be on PATH for conversions to work.
+# Maps binary name → install hint for the error message.
+_REQUIRED_BINARIES: dict[str, str] = {
+    "pandoc": "apt-get install pandoc",
+    "ffmpeg": "apt-get install ffmpeg",
+}
+
 # ── Startup / shutdown ────────────────────────────────────────────────────────
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[type-arg]
-    """Start background cleanup loop; tear down temp dir on exit."""
+    """Validate system dependencies, then start background cleanup loop."""
+    # ── Startup validation ────────────────────────────────────────────────
+    missing: list[str] = []
+
+    # 1. Check required external binaries
+    for binary, install_hint in _REQUIRED_BINARIES.items():
+        if shutil.which(binary) is None:
+            missing.append(
+                f"  - '{binary}' not found on PATH. Fix: {install_hint}"
+            )
+
+    # 2. Check WeasyPrint can import (validates cairo/pango system libs)
+    try:
+        import weasyprint  # noqa: F401
+    except Exception as exc:
+        missing.append(
+            f"  - weasyprint failed to import: {exc}\n"
+            "    Fix: ensure libpangoft2-1.0-0 and libharfbuzz-subset0 are installed."
+        )
+
+    if missing:
+        log.critical(
+            "STARTUP ERROR — required system dependencies are missing:\n%s\n"
+            "Container cannot serve requests. Exiting.",
+            "\n".join(missing),
+        )
+        os._exit(1)  # Bypass exception handlers; exit unconditionally
+
+    log.info("Startup checks passed. All required binaries present.")
+
+    # ── Background cleanup loop ───────────────────────────────────────────
     task = asyncio.create_task(_cleanup_loop())
     log.info("File converter started. Temp dir: %s", TEMP_DIR)
     try:
