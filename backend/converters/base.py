@@ -37,5 +37,10 @@ class BaseConverter(ABC):
         Kwargs are converter-specific and silently ignored by converters that
         don't use them. Currently recognised kwargs:
             quality (str): "original" | "high" | "medium" | "low"
+            progress_callback (callable | None): optional function accepting a
+                float 0-100 representing conversion percent complete.
+                VideoConverter reports real ffmpeg progress via ffmpeg-progress-yield.
+                All other converters report stage-based estimates: 50 at start of
+                the core operation, 99 on completion.
         """
         ...

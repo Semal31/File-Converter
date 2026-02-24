@@ -1,7 +1,7 @@
 """Video format converter.
 
 Supports: MP4, MKV, AVI, WEBM, MOV, GIF
-Engine: ffmpeg-python (wraps the ffmpeg binary).
+Engine: ffmpeg CLI via ffmpeg-progress-yield for video; subprocess for GIF two-pass.
 
 Quality levels (passed via convert(..., quality="original")):
     high     — CRF 15 for x264/mpeg4, CRF 20 for VP9  (near-transparent quality)
@@ -16,6 +16,7 @@ GIF-specific parameters (passed as kwargs):
 import asyncio
 import functools
 import logging
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -115,12 +116,13 @@ class VideoConverter(BaseConverter):
         output_path: Path,
         **kwargs,
     ) -> None:
-        quality:   str        = kwargs.get("quality",   "original")
-        max_width: int | None = kwargs.get("max_width", None)
+        quality:           str        = kwargs.get("quality",           "original")
+        max_width:         int | None = kwargs.get("max_width",         None)
+        progress_callback             = kwargs.get("progress_callback", None)
         fn = functools.partial(
             self._convert_sync,
             input_path, input_format, output_format, output_path,
-            quality=quality, max_width=max_width,
+            quality=quality, max_width=max_width, progress_callback=progress_callback,
         )
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, fn)
@@ -133,42 +135,42 @@ class VideoConverter(BaseConverter):
         output_path: Path,
         quality: str = "original",
         max_width: int | None = None,
+        progress_callback=None,
     ) -> None:
         if output_format == "gif":
-            self._to_gif(input_path, output_path, max_width=max_width)
+            self._to_gif(input_path, output_path, max_width=max_width,
+                         progress_callback=progress_callback)
             return
 
-        import ffmpeg  # type: ignore
+        from ffmpeg_progress_yield import FfmpegProgress  # type: ignore
 
         vcodec = _VIDEO_CODEC.get(output_format, "libx264")
         acodec = _AUDIO_CODEC.get(output_format)
         crf_x264, crf_vp9 = _CRF.get(quality, _CRF["original"])
 
-        output_kwargs: dict = {
-            "vcodec":   vcodec,
-            "loglevel": "error",
-        }
+        # Build the ffmpeg CLI args list
+        cmd: list[str] = [
+            "ffmpeg",
+            "-i", str(input_path),
+            "-vcodec", vcodec,
+            "-loglevel", "error",
+        ]
 
         if acodec is not None:
-            output_kwargs["acodec"] = acodec
+            cmd += ["-acodec", acodec]
 
         if vcodec in ("libx264", "mpeg4"):
-            output_kwargs["crf"]    = crf_x264
-            # "medium" preset: better compression than "fast" at the same CRF
-            # (~15% slower encode, noticeably smaller files at the same quality).
-            output_kwargs["preset"] = "medium"
-
+            cmd += ["-crf", str(crf_x264), "-preset", "medium"]
         elif vcodec == "libvpx-vp9":
-            output_kwargs["crf"]  = crf_vp9
-            output_kwargs["b:v"]  = 0   # enable CRF mode (not ABR) for VP9
+            cmd += ["-crf", str(crf_vp9), "-b:v", "0"]
 
-        (
-            ffmpeg
-            .input(str(input_path))
-            .output(str(output_path), **output_kwargs)
-            .overwrite_output()
-            .run(quiet=True)
-        )
+        cmd += [str(output_path), "-y"]
+
+        with FfmpegProgress(cmd) as ff:
+            for pct in ff.run_command_with_progress():
+                if progress_callback:
+                    progress_callback(pct)
+
         active_crf = crf_x264 if vcodec != "libvpx-vp9" else crf_vp9
         log.info(
             "video: %s → %s OK (codec=%s CRF=%d quality=%s)",
@@ -180,14 +182,14 @@ class VideoConverter(BaseConverter):
         input_path: Path,
         output_path: Path,
         max_width: int | None = None,
+        progress_callback=None,
     ) -> None:
         """Two-pass palette-based GIF encoding.
 
         Uses source resolution and FPS (capped at 24) by default.
         Pass max_width to downscale proportionally if the source is wider.
+        Reports stage-based progress: 30 after palette generation, 99 after encode.
         """
-        import ffmpeg  # type: ignore
-
         info      = _probe_video(input_path)
         src_fps   = info["fps"]   if info["fps"]   > 0 else 24.0
         src_width = info["width"] if info["width"] > 0 else 0
@@ -199,9 +201,9 @@ class VideoConverter(BaseConverter):
         #   -2       = keep source width, ensure even pixel count (GIF requires it)
         #   max_width = downscale to this width when source is wider
         if max_width and src_width > max_width:
-            scale_w = max_width
+            scale_w = str(max_width)
         else:
-            scale_w = -2
+            scale_w = "-2"
 
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
             palette_path = tmp.name
@@ -210,35 +212,32 @@ class VideoConverter(BaseConverter):
             # Pass 1 — build an optimised per-content colour palette.
             # "diff" stats_mode weights colours by motion, giving far better
             # results for animated content than the default full-frame analysis.
-            (
-                ffmpeg
-                .input(str(input_path))
-                .filter("fps",        fps=gif_fps)
-                .filter("scale",      w=scale_w, h=-2, flags="lanczos")
-                .filter("palettegen", stats_mode="diff")
-                .output(palette_path, loglevel="error")
-                .overwrite_output()
-                .run(quiet=True)
-            )
+            pass1_cmd = [
+                "ffmpeg",
+                "-i", str(input_path),
+                "-vf", f"fps={gif_fps},scale={scale_w}:-2:flags=lanczos,palettegen=stats_mode=diff",
+                "-loglevel", "error",
+                "-y", palette_path,
+            ]
+            subprocess.run(pass1_cmd, check=True)
+
+            if progress_callback:
+                progress_callback(30)
 
             # Pass 2 — encode using the generated palette.
-            inp = ffmpeg.input(str(input_path))
-            pal = ffmpeg.input(palette_path)
-            (
-                ffmpeg
-                .filter(
-                    [
-                        inp.filter("fps",   fps=gif_fps)
-                           .filter("scale", w=scale_w, h=-2, flags="lanczos"),
-                        pal,
-                    ],
-                    "paletteuse",
-                    dither="bayer",
-                )
-                .output(str(output_path), loglevel="error")
-                .overwrite_output()
-                .run(quiet=True)
-            )
+            pass2_cmd = [
+                "ffmpeg",
+                "-i", str(input_path),
+                "-i", palette_path,
+                "-lavfi", f"fps={gif_fps},scale={scale_w}:-2:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer",
+                "-loglevel", "error",
+                "-y", str(output_path),
+            ]
+            subprocess.run(pass2_cmd, check=True)
+
+            if progress_callback:
+                progress_callback(99)
+
         finally:
             Path(palette_path).unlink(missing_ok=True)
 

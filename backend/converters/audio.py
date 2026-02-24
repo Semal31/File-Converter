@@ -175,11 +175,12 @@ class AudioConverter(BaseConverter):
         output_path: Path,
         **kwargs,
     ) -> None:
-        quality: str = kwargs.get("quality", "original")
+        quality:           str = kwargs.get("quality",           "original")
+        progress_callback      = kwargs.get("progress_callback", None)
         fn = functools.partial(
             self._convert_sync,
             input_path, input_format, output_format, output_path,
-            quality=quality,
+            quality=quality, progress_callback=progress_callback,
         )
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, fn)
@@ -191,6 +192,7 @@ class AudioConverter(BaseConverter):
         output_format: str,
         output_path: Path,
         quality: str = "original",
+        progress_callback=None,
     ) -> None:
         from pydub import AudioSegment  # type: ignore
 
@@ -269,7 +271,11 @@ class AudioConverter(BaseConverter):
                 input_format, output_format, quality, export_kwargs,
             )
 
+        if progress_callback:
+            progress_callback(50)
         audio.export(str(output_path), format=write_fmt, **export_kwargs)
+        if progress_callback:
+            progress_callback(99)
         log.info(
             "audio: %s → %s OK (%.1fs, quality=%s)",
             input_format, output_format, len(audio) / 1000, quality,

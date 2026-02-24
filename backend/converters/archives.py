@@ -5,6 +5,7 @@ Strategy: extract the source archive to a temp directory, repack into the target
 """
 
 import asyncio
+import functools
 import logging
 import shutil
 import tarfile
@@ -48,10 +49,13 @@ class ArchiveConverter(BaseConverter):
         **kwargs,
     ) -> None:
         # quality kwarg is not applicable to archive repacking; ignored.
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
-            None, self._convert_sync, input_path, input_format, output_format, output_path
+        progress_callback = kwargs.get("progress_callback", None)
+        fn = functools.partial(
+            self._convert_sync, input_path, input_format, output_format, output_path,
+            progress_callback=progress_callback,
         )
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, fn)
 
     def _convert_sync(
         self,
@@ -59,12 +63,17 @@ class ArchiveConverter(BaseConverter):
         input_format: str,
         output_format: str,
         output_path: Path,
+        progress_callback=None,
         **kwargs,  # quality and other kwargs not applicable to this converter type
     ) -> None:
+        if progress_callback:
+            progress_callback(50)
         with tempfile.TemporaryDirectory() as tmpdir:
             extract_dir = Path(tmpdir)
             self._extract(input_path, input_format, extract_dir)
             self._pack(extract_dir, output_format, output_path)
+        if progress_callback:
+            progress_callback(99)
         log.info("archive: %s → %s OK", input_format, output_format)
 
     # ── Extractors ───────────────────────────────────────────────────────────

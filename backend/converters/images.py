@@ -6,6 +6,7 @@ Note: raster→SVG is not supported (requires tracing software).
 """
 
 import asyncio
+import functools
 import io
 import logging
 from pathlib import Path
@@ -66,10 +67,13 @@ class ImageConverter(BaseConverter):
         **kwargs,
     ) -> None:
         # quality kwarg is not applicable to image conversion; ignored.
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
-            None, self._convert_sync, input_path, input_format, output_format, output_path
+        progress_callback = kwargs.get("progress_callback", None)
+        fn = functools.partial(
+            self._convert_sync, input_path, input_format, output_format, output_path,
+            progress_callback=progress_callback,
         )
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, fn)
 
     def _convert_sync(
         self,
@@ -77,6 +81,7 @@ class ImageConverter(BaseConverter):
         input_format: str,
         output_format: str,
         output_path: Path,
+        progress_callback=None,
         **kwargs,  # quality and other kwargs not applicable to this converter type
     ) -> None:
         from PIL import Image  # type: ignore
@@ -95,6 +100,9 @@ class ImageConverter(BaseConverter):
         if save_fmt in ("JPEG", "BMP") and img.mode in ("RGBA", "LA", "P"):
             img = img.convert("RGB")
 
+        if progress_callback:
+            progress_callback(50)
+
         # ICO has size constraints
         if save_fmt == "ICO":
             img = img.convert("RGBA")
@@ -111,6 +119,8 @@ class ImageConverter(BaseConverter):
                 save_kwargs["method"] = 6
             img.save(str(output_path), format=save_fmt, **save_kwargs)
 
+        if progress_callback:
+            progress_callback(99)
         log.info("image: %s → %s OK", input_format, output_format)
 
     @staticmethod

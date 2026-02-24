@@ -5,6 +5,7 @@ Engine: pypandoc (wraps the pandoc binary) + weasyprint for HTML→PDF fallback.
 """
 
 import asyncio
+import functools
 import logging
 import subprocess
 import tempfile
@@ -61,10 +62,13 @@ class DocumentConverter(BaseConverter):
         **kwargs,
     ) -> None:
         # quality kwarg is not applicable to document conversion; ignored.
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
-            None, self._convert_sync, input_path, input_format, output_format, output_path
+        progress_callback = kwargs.get("progress_callback", None)
+        fn = functools.partial(
+            self._convert_sync, input_path, input_format, output_format, output_path,
+            progress_callback=progress_callback,
         )
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, fn)
 
     def _convert_sync(
         self,
@@ -72,12 +76,17 @@ class DocumentConverter(BaseConverter):
         input_format: str,
         output_format: str,
         output_path: Path,
+        progress_callback=None,
         **kwargs,  # quality and other kwargs not applicable to this converter type
     ) -> None:
         import pypandoc
 
         if output_format == "pdf":
+            if progress_callback:
+                progress_callback(50)
             self._to_pdf(input_path, input_format, output_path)
+            if progress_callback:
+                progress_callback(99)
             return
 
         in_fmt = _PANDOC_READ.get(input_format)
@@ -90,6 +99,8 @@ class DocumentConverter(BaseConverter):
         if output_format == "html":
             extra_args = ["--standalone"]
 
+        if progress_callback:
+            progress_callback(50)
         pypandoc.convert_file(
             str(input_path),
             out_fmt,
@@ -97,6 +108,8 @@ class DocumentConverter(BaseConverter):
             outputfile=str(output_path),
             extra_args=extra_args,
         )
+        if progress_callback:
+            progress_callback(99)
         log.info("pandoc: %s → %s OK", input_format, output_format)
 
     def _to_pdf(self, input_path: Path, input_format: str, output_path: Path) -> None:
