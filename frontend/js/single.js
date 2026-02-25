@@ -12,7 +12,7 @@ import {
   addToHistory,
 } from './state.js';
 
-import { apiUpload, apiConvert, apiDownloadUrl } from './api.js';
+import { apiUploadWithProgress, apiConvert, watchJobProgress, apiDownloadUrl } from './api.js';
 
 import {
   showStatus,
@@ -21,6 +21,8 @@ import {
   renderSingleFileInfo,
   renderSingleFormats,
   registerSelectSingleFormat,
+  setProgressBar,
+  showDownloadButton,
 } from './ui.js';
 
 import { uploadBulk } from './bulk.js';
@@ -79,25 +81,39 @@ export function onDrop(event) {
 /* ── Single-file conversion flow ────────────────────────────────────────── */
 
 /**
- * Upload a single file, store result in state, render info and formats.
+ * Upload a single file using XHR with upload progress (0-50% of the bar).
+ * After upload completes, hides progress bar and shows format selection.
  * @param {File} file
  */
 export async function uploadSingle(file) {
   resetAll();
-  showStatus('status-single', 'info', 'Uploading…');
   document.getElementById('format-card-single').style.display = '';
+  document.getElementById('progress-wrap-single').style.display = '';
+  document.getElementById('download-area-single').style.display = 'none';
+  document.getElementById('download-area-single').innerHTML = '';
+
+  // Upload phase: 0% to 50% of the bar
+  setProgressBar('progress-fill-single', 'progress-label-single', 0, 'Uploading…');
 
   try {
-    const data = await apiUpload(file);
+    const data = await apiUploadWithProgress(file, (ratio) => {
+      setProgressBar('progress-fill-single', 'progress-label-single', ratio * 50, 'Uploading…');
+    });
 
-    // Store file_id and category; singleFormat starts null (user must pick from chips).
+    // Upload complete — bar at 50%
+    setProgressBar('progress-fill-single', 'progress-label-single', 50, 'Uploaded.');
+    document.getElementById('progress-wrap-single').style.display = 'none';
+    document.getElementById('progress-fill-single').style.width = '0%';
+
+    // Store state
     setSingleFile(data.file_id, null, data.category, data.available_formats || []);
-
     renderSingleFileInfo(data, file.size);
     renderSingleFormats(data.available_formats || []);
     clearStatus('status-single');
   } catch (err) {
     document.getElementById('format-card-single').style.display = 'none';
+    document.getElementById('progress-wrap-single').style.display = 'none';
+    document.getElementById('progress-fill-single').style.width = '0%';
     showStatus('status-single', 'error', buildErrorHtml(err.message, err.rawDetail || null));
   }
 }
@@ -117,7 +133,8 @@ export function selectSingleFormat(fmt, btn) {
 
 /**
  * Convert the uploaded single file using current state.
- * Reads singleFileId, singleFormat, currentQuality as live ES module bindings.
+ * Two-phase progress: SSE conversion maps 0-100% onto bar range 50-100%.
+ * Shows a Download button on completion (no auto-download).
  */
 export async function convertSingle() {
   if (!singleFileId || !singleFormat) return;
@@ -125,30 +142,50 @@ export async function convertSingle() {
   const btn = document.getElementById('convert-btn-single');
   btn.disabled = true;
   document.getElementById('progress-wrap-single').style.display = '';
+  document.getElementById('download-area-single').style.display = 'none';
+  document.getElementById('download-area-single').innerHTML = '';
   clearStatus('status-single');
 
+  // Start at 50% (upload was 0-50%)
+  setProgressBar('progress-fill-single', 'progress-label-single', 50, 'Converting…');
+
   try {
-    const data = await apiConvert(singleFileId, singleFormat, currentQuality);
+    // Fire conversion — returns {job_id}
+    const { job_id } = await apiConvert(singleFileId, singleFormat, currentQuality);
 
-    document.getElementById('progress-fill-single').style.width = '100%';
+    // SSE phase: 50% to 100% of the bar
+    const downloadId = await watchJobProgress(job_id, (pct) => {
+      const barPct = 50 + (pct / 100) * 50;
+      setProgressBar('progress-fill-single', 'progress-label-single', barPct, 'Converting…');
+    });
 
+    // Done — bar at 100%
+    setProgressBar('progress-fill-single', 'progress-label-single', 100, 'Done!');
+
+    // Derive output filename: {original_stem}.{target_format}
+    const originalName = document.getElementById('fi-name').textContent || 'file';
+    const stem = originalName.replace(/\.[^.]+$/, '');
+    const outputFilename = `${stem}.${singleFormat}`;
+
+    // Show Download button (per user decision: no auto-download, user clicks to save)
+    showDownloadButton('download-area-single', downloadId, outputFilename);
+
+    // Add to history
     addToHistory({
       type:        'single',
-      filename:    data.output_filename,
+      filename:    outputFilename,
       from:        document.getElementById('fi-fmt').textContent,
       to:          singleFormat.toUpperCase(),
       quality:     currentQuality,
-      download_id: data.download_id,
+      download_id: downloadId,
     });
 
-    showStatus('status-single', 'success',
-      `✓ Done! <a href="${apiDownloadUrl(data.download_id)}" download="${data.output_filename}"` +
-      ` style="color:inherit;text-decoration:underline;margin-left:6px;">Download ${data.output_filename}</a>`);
+    showStatus('status-single', 'success', `Conversion complete — file ready for download.`);
   } catch (err) {
     showStatus('status-single', 'error', buildErrorHtml(err.message, err.rawDetail || null));
-  } finally {
     document.getElementById('progress-wrap-single').style.display = 'none';
     document.getElementById('progress-fill-single').style.width = '0%';
+  } finally {
     btn.disabled = false;
   }
 }
@@ -163,6 +200,8 @@ export function resetAll() {
   document.getElementById('format-grid-single').innerHTML = '';
   document.getElementById('convert-btn-single').disabled = true;
   clearStatus('status-single');
+  document.getElementById('download-area-single').style.display = 'none';
+  document.getElementById('download-area-single').innerHTML = '';
 
   resetBulkState();
   document.getElementById('bulk-file-list').innerHTML = '';
