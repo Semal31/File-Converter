@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** Every supported conversion must work reliably — users drop a file in and get a converted file out, every time.
-**Current focus:** Phase 4 — Frontend ES Module Refactor (next)
+**Current focus:** Phase 5 — Frontend Polish (next)
 
 ## Current Position
 
-Phase: 4 of 5 (Frontend ES Module Refactor)
-Plan: 1 of 2 in current phase
-Status: Phase 4 in progress — Plan 04-01 complete
-Last activity: 2026-02-25 — Plan 04-01 complete (CSS extracted to app.css, state.js, api.js, ui.js foundation modules created)
+Phase: 4 of 5 (Frontend ES Module Refactor) — COMPLETE
+Plan: 2 of 2 in current phase — COMPLETE
+Status: Phase 4 complete — all plans done; ready for Phase 5
+Last activity: 2026-02-25 — Plan 04-02 complete (single.js, bulk.js, main.js created; index.html stripped to clean HTML shell; all 15 browser verification items passed by human)
 
-Progress: [███████░░░] 70%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: ~5 min
-- Total execution time: ~21 min
+- Total execution time: ~46 min
 
 **By Phase:**
 
@@ -42,6 +42,7 @@ Progress: [███████░░░] 70%
 | Phase 03-backend-progress-infrastructure P01 | 4min | 2 tasks | 8 files |
 | Phase 03-backend-progress-infrastructure P02 | 3min | 2 tasks | 1 files |
 | Phase 04-frontend-es-module-refactor P01 | 3min | 2 tasks | 4 files |
+| Phase 04-frontend-es-module-refactor P02 | ~25min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -85,5 +86,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 04-01-PLAN.md — CSS extracted to app.css (487 lines), state.js, api.js, ui.js foundation modules created; all verifications passed.
+Stopped at: Completed 04-02-PLAN.md — single.js, bulk.js, main.js created; index.html stripped to clean HTML shell; Phase 4 ES module refactor fully complete with human browser verification passed.
 Resume file: None

@@ -32,9 +32,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Fix Dockerfile: add missing WeasyPrint system deps, Noto fonts, UTF-8 ENV, build-time smoke test
-- [ ] 01-02-PLAN.md — Add startup binary validation to FastAPI lifespan (pandoc, ffmpeg, weasyprint)
-- [ ] 01-03-PLAN.md — Run container smoke tests and human verification of Phase 1 results
+- [x] 01-01-PLAN.md — Fix Dockerfile: add missing WeasyPrint system deps, Noto fonts, UTF-8 ENV, build-time smoke test
+- [x] 01-02-PLAN.md — Add startup binary validation to FastAPI lifespan (pandoc, ffmpeg, weasyprint)
+- [x] 01-03-PLAN.md — Run container smoke tests and human verification of Phase 1 results
 
 ### Phase 2: Error Handling
 **Goal**: Users see clear, actionable messages when conversions fail instead of raw Python tracebacks
@@ -47,8 +47,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Add _classify_exc function, custom exception handler, and structured error responses to backend API
-- [ ] 02-02-PLAN.md — Update frontend to read data.message, add buildErrorHtml helper with expandable detail toggles
+- [x] 02-01-PLAN.md — Add _classify_exc function, custom exception handler, and structured error responses to backend API
+- [x] 02-02-PLAN.md — Update frontend to read data.message, add buildErrorHtml helper with expandable detail toggles
 
 ### Phase 3: Backend Progress Infrastructure
 **Goal**: The backend can track conversion jobs asynchronously and stream status events to any client that asks
@@ -62,8 +62,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Add progress dependencies and wire progress_callback through all converter modules
-- [ ] 03-02-PLAN.md — Add JOBS registry, SSE endpoint, and convert endpoints to async fire-and-forget
+- [x] 03-01-PLAN.md — Add progress dependencies and wire progress_callback through all converter modules
+- [x] 03-02-PLAN.md — Add JOBS registry, SSE endpoint, and convert endpoints to async fire-and-forget
 
 ### Phase 4: Frontend ES Module Refactor
 **Goal**: The monolithic 56 KB index.html is split into maintainable ES modules with no change to observable behavior
@@ -77,8 +77,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Extract CSS to app.css, create foundation JS modules (state.js, api.js, ui.js)
-- [ ] 04-02-PLAN.md — Create feature modules (single.js, bulk.js), wire main.js entry point, strip index.html, verify in browser
+- [x] 04-01-PLAN.md — Extract CSS to app.css, create foundation JS modules (state.js, api.js, ui.js)
+- [x] 04-02-PLAN.md — Create feature modules (single.js, bulk.js), wire main.js entry point, strip index.html, verify in browser
 
 ### Phase 5: Progress Wiring and UI Polish
 **Goal**: Users see real conversion progress, upload progress for large files, and a polished UI that feels like a finished product
