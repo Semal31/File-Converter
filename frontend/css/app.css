@@ -508,6 +508,116 @@ html, body {
   color: var(--text-2); letter-spacing: 0.04em;
 }
 
+/* ── Bulk row per-file progress bar ─────────────────────────────────── */
+.bulk-file-progress {
+  flex-shrink: 0;
+  width: 100px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bulk-progress-bar {
+  flex: 1;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.bulk-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.bulk-file-row.done .bulk-progress-fill {
+  background: var(--success);
+}
+.bulk-file-row.error .bulk-progress-fill {
+  background: var(--error);
+}
+.bulk-progress-label {
+  font-size: 9px;
+  color: var(--text-2);
+  white-space: nowrap;
+  min-width: 30px;
+}
+
+/* ── Bulk row remove button ──────────────────────────────────────────── */
+.bulk-row-remove {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.bulk-row-remove:hover {
+  border-color: var(--error);
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ── Bulk row per-file download button ───────────────────────────────── */
+.bulk-row-dl {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--success);
+  color: var(--success);
+  font-size: 14px;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+.bulk-row-dl:hover {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+/* ── Bulk row action column ──────────────────────────────────────────── */
+.bulk-file-action {
+  flex-shrink: 0;
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Bulk summary banner ─────────────────────────────────────────────── */
+.bulk-summary {
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bulk-summary.success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: var(--success);
+}
+.bulk-summary.partial {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: var(--warning);
+}
+.bulk-summary.failure {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--error);
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .app { flex-direction: column; }

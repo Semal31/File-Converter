@@ -1,6 +1,7 @@
 /* ── UI helpers and rendering functions ─────────────────────────────────── */
 
-import { history, clearHistoryState, setBulkFormat } from './state.js';
+import { history, clearHistoryState, setBulkFormat, removeBulkFile, getBulkFiles } from './state.js';
+import { apiDownloadUrl } from './api.js';
 
 /* ── Circular dependency resolution ─────────────────────────────────────── */
 // renderSingleFormats needs selectSingleFormat from single.js, but single.js
@@ -198,6 +199,8 @@ export function renderBulkList(bulkFiles) {
 
 /**
  * Render a single bulk file row.
+ * Includes per-row progress bar, X remove button (pending only),
+ * Download button (done only), and smart format default.
  * The format select has NO inline handler — event delegation handles changes.
  * @param {Object} f - bulk file descriptor
  * @param {number} i - row index
@@ -208,7 +211,8 @@ export function renderBulkRow(f, i, container) {
   row.className = `bulk-file-row ${f.status}`;
   row.id = `bulk-row-${i}`;
 
-  if (f.error) {
+  if (f.error && f.status === 'error' && !f.file_id) {
+    // Upload-time error row (no file_id means upload itself failed)
     row.innerHTML = `
       <span class="bulk-file-icon">⚠</span>
       <span class="bulk-file-name" style="color:var(--error);">${esc(f.filename)}</span>
@@ -218,24 +222,48 @@ export function renderBulkRow(f, i, container) {
     return;
   }
 
-  const fmtOptions = f.available_formats.map(fmt =>
+  // Smart default: pre-fill first available format if none set
+  if (!f.target_format && f.available_formats && f.available_formats.length > 0) {
+    f.target_format = f.available_formats[0];
+  }
+
+  const fmtOptions = (f.available_formats || []).map(fmt =>
     `<option value="${fmt}" ${fmt === f.target_format ? 'selected' : ''}>${fmt.toUpperCase()}</option>`
   ).join('');
+
+  // Build action cell based on status
+  let actionHtml = '';
+  if (f.status === 'pending') {
+    actionHtml = `<button class="bulk-row-remove" data-index="${i}" title="Remove">&times;</button>`;
+  } else if (f.status === 'done' && f.download_id) {
+    actionHtml = `<a href="${apiDownloadUrl(f.download_id)}" download="${esc(f.filename)}" class="bulk-row-dl" title="Download">↓</a>`;
+  }
 
   row.innerHTML = `
     <span class="bulk-file-icon">${categoryIcon(f.category)}</span>
     <span class="bulk-file-name">${esc(f.filename)}</span>
     <span class="bulk-file-size">${fmtSize(f.size)}</span>
-    <span class="bulk-file-cat"><span class="file-badge badge-${f.category}">${f.category}</span></span>
     <span class="bulk-file-fmt">
-      <select>
+      <select ${f.status !== 'pending' ? 'disabled' : ''}>
         <option value="">— format —</option>
         ${fmtOptions}
       </select>
     </span>
+    <span class="bulk-file-progress" id="bulk-progress-${i}">
+      <span class="bulk-progress-bar"><span class="bulk-progress-fill" id="bulk-fill-${i}"></span></span>
+      <span class="bulk-progress-label" id="bulk-plabel-${i}"></span>
+    </span>
     <span class="bulk-file-status" id="bulk-status-${i}">${statusIcon(f.status)}</span>
+    <span class="bulk-file-action" id="bulk-action-${i}">${actionHtml}</span>
   `;
 
+  // Set initial progress bar width if progress > 0
+  if (f.progress && f.progress > 0) {
+    const fill = row.querySelector(`#bulk-fill-${i}`);
+    if (fill) fill.style.width = `${f.progress}%`;
+  }
+
+  // Append error note if this is a conversion-time error
   if (f.error && f.status === 'error') {
     const note = document.createElement('div');
     note.className = 'bulk-error-note';
@@ -244,6 +272,37 @@ export function renderBulkRow(f, i, container) {
   }
 
   container.appendChild(row);
+}
+
+/**
+ * Update a bulk row's progress bar fill and label.
+ * @param {number} index - row index
+ * @param {number} percent - 0-100
+ * @param {string} [label] - optional label prefix
+ */
+export function updateBulkRowProgress(index, percent, label) {
+  const fill = document.getElementById(`bulk-fill-${index}`);
+  const plabel = document.getElementById(`bulk-plabel-${index}`);
+  if (fill) fill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+  if (plabel) plabel.textContent = label ? `${label} ${Math.round(percent)}%` : '';
+}
+
+/**
+ * Update a bulk row's action cell (X remove or download button).
+ * @param {Object[]} bulkFiles - bulk files array from state
+ * @param {number} index - row index
+ */
+export function updateBulkRowAction(bulkFiles, index) {
+  const f = bulkFiles[index];
+  const container = document.getElementById(`bulk-action-${index}`);
+  if (!container) return;
+  if (f.status === 'done' && f.download_id) {
+    container.innerHTML = `<a href="${apiDownloadUrl(f.download_id)}" download="${esc(f.filename)}" class="bulk-row-dl" title="Download">↓</a>`;
+  } else if (f.status === 'pending') {
+    container.innerHTML = `<button class="bulk-row-remove" data-index="${index}" title="Remove">&times;</button>`;
+  } else {
+    container.innerHTML = '';
+  }
 }
 
 /**
@@ -277,6 +336,11 @@ export function updateBulkRowStatus(bulkFiles, index, status, errMsg, errDetail)
     note.innerHTML = buildErrorHtml(errMsg, errDetail || null);
     row.appendChild(note);
   }
+
+  // Update action cell and disable select when not pending
+  updateBulkRowAction(bulkFiles, index);
+  const sel = row && row.querySelector('select');
+  if (sel && status !== 'pending') sel.disabled = true;
 }
 
 /**
@@ -366,16 +430,34 @@ export function showDownloadButton(containerId, downloadId, filename) {
 }
 
 /**
- * Attach a single 'change' event listener on #bulk-file-list that delegates
- * to setBulkFormat (imported from state.js) when a SELECT element changes.
+ * Attach delegated event listeners on #bulk-file-list:
+ * - 'change' on SELECT: updates target_format via setBulkFormat
+ * - 'click' on .bulk-row-remove: removes file via removeBulkFile and re-renders
  */
 export function initBulkListDelegation() {
   const list = document.getElementById('bulk-file-list');
+
+  // Format select change delegation
   list.addEventListener('change', e => {
     if (e.target.tagName !== 'SELECT') return;
     const row = e.target.closest('[id^="bulk-row-"]');
     if (!row) return;
     const index = parseInt(row.id.replace('bulk-row-', ''), 10);
     setBulkFormat(index, e.target.value);
+  });
+
+  // Remove button click delegation
+  list.addEventListener('click', e => {
+    const btn = e.target.closest('.bulk-row-remove');
+    if (!btn) return;
+    const index = parseInt(btn.dataset.index, 10);
+    removeBulkFile(index);
+    renderBulkList(getBulkFiles());
+
+    // Hide bulk card if no files left
+    const remaining = getBulkFiles();
+    if (remaining.length === 0) {
+      document.getElementById('bulk-list-card').style.display = 'none';
+    }
   });
 }

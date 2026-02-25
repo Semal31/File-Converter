@@ -10,7 +10,7 @@ export let singleFmts     = [];
 
 /* Bulk mode */
 export let bulkFiles = [];
-// [{file_id, filename, size, category, detected_format, available_formats, target_format, status, error}]
+// [{file_id, filename, size, category, detected_format, available_formats, target_format, status, error, errorDetail, download_id, progress}]
 
 /* History */
 export let history = [];
@@ -95,6 +95,14 @@ export function addBulkFile(fileObj) {
  */
 export function getBulkFiles() {
   return bulkFiles;
+}
+
+/**
+ * Remove a file from the bulk files array by index.
+ * @param {number} index
+ */
+export function removeBulkFile(index) {
+  bulkFiles.splice(index, 1);
 }
 
 /* ── History mutations ───────────────────────────────────────────────────── */
