@@ -69,6 +69,8 @@ Recent decisions affecting current work:
 - [Phase 04-frontend-es-module-refactor]: state.js uses export let for all state vars; mutation functions exported separately since importers cannot reassign export let bindings
 - [Phase 04-frontend-es-module-refactor]: registerSelectSingleFormat() registration pattern chosen to break ui.js <> single.js circular import without parameter passing
 - [Phase 04-frontend-es-module-refactor]: renderBulkRow inline onchange removed; initBulkListDelegation() attaches single delegated listener on #bulk-file-list
+- [Phase 04-frontend-es-module-refactor]: single.js imports uploadBulk from bulk.js directly (acyclic: single->bulk, no reverse) — handleFiles routing stays clean without registration pattern
+- [Phase 04-frontend-es-module-refactor]: setSingleFormat() added to state.js to allow selectSingleFormat in single.js to update only the format field without resetting file_id/category/fmts
 
 ### Pending Todos
 
