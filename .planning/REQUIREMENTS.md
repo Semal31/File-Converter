@@ -27,8 +27,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### UI Polish
 
-- [ ] **UIPX-01**: UI fonts self-hosted as local woff2 files instead of Google Fonts CDN (fixes offline deployments)
-- [ ] **UIPX-02**: Modern, polished dark theme redesign with consistent spacing and refined components
+- [x] **UIPX-01**: UI fonts self-hosted as local woff2 files instead of Google Fonts CDN (fixes offline deployments)
+- [x] **UIPX-02**: Modern, polished dark theme redesign with consistent spacing and refined components
 - [x] **UIPX-03**: Improved batch workflow with per-file format selection, smart defaults, and clear per-item status
 - [x] **UIPX-04**: Frontend JS refactored into ES modules (no build step, served as static files via nginx)
 
@@ -78,8 +78,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROG-01 | Phase 3 | Complete |
 | PROG-02 | Phase 5 | Complete |
 | PROG-03 | Phase 5 | Complete |
-| UIPX-01 | Phase 5 | Pending |
-| UIPX-02 | Phase 5 | Pending |
+| UIPX-01 | Phase 5 | Complete |
+| UIPX-02 | Phase 5 | Complete |
 | UIPX-03 | Phase 5 | Complete |
 | UIPX-04 | Phase 4 | Complete |
 

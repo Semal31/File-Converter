@@ -43,6 +43,7 @@ Progress: [████████░░] 84%
 | Phase 03-backend-progress-infrastructure P02 | 3min | 2 tasks | 1 files |
 | Phase 04-frontend-es-module-refactor P01 | 3min | 2 tasks | 4 files |
 | Phase 04-frontend-es-module-refactor P02 | ~25min | 3 tasks | 5 files |
+| Phase 05-progress-wiring-and-ui-polish P01 | ~3min | 2 tasks | 4 files |
 | Phase 05-progress-wiring-and-ui-polish P02 | ~2min | 3 tasks | 3 files |
 
 ## Accumulated Context
@@ -73,6 +74,9 @@ Recent decisions affecting current work:
 - [Phase 04-frontend-es-module-refactor]: renderBulkRow inline onchange removed; initBulkListDelegation() attaches single delegated listener on #bulk-file-list
 - [Phase 04-frontend-es-module-refactor]: single.js imports uploadBulk from bulk.js directly (acyclic: single->bulk, no reverse) — handleFiles routing stays clean without registration pattern
 - [Phase 04-frontend-es-module-refactor]: setSingleFormat() added to state.js to allow selectSingleFormat in single.js to update only the format field without resetting file_id/category/fmts
+- [Phase 05-progress-wiring-and-ui-polish]: Self-hosted fonts via Fontsource CDN woff2 variable files; no Google Fonts CDN dependency (UIPX-01)
+- [Phase 05-progress-wiring-and-ui-polish]: Emerald #10b981 as primary accent replacing Glacier cyan #CBF3F0; --secondary removed (was only badge-doc)
+- [Phase 05-progress-wiring-and-ui-polish]: Body font switched to Inter Variable at 14px from monospace for readability; monospace reserved for chips/selects/code UI
 - [Phase 05-progress-wiring-and-ui-polish]: watchJobProgress uses 'message' event listener (not named events) because backend SSE uses unnamed events (no event: field in stream)
 - [Phase 05-progress-wiring-and-ui-polish]: apiBulkDownloadZip uses hidden <a> click (not fetch/XHR) — backend streams file with Content-Disposition: attachment; browser handles natively
 - [Phase 05-progress-wiring-and-ui-polish]: apiBulkUploadWithProgress uploads files sequentially (not concurrently) to avoid server overload; each gets own XHR for accurate per-file progress
