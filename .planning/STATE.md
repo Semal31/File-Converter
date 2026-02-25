@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 ## Current Position
 
 Phase: 5 of 5 (Progress Wiring and UI Polish)
-Plan: 3 of 5 in current phase — COMPLETE
-Status: Phase 5 in progress — Plan 03 complete (two-phase XHR upload + SSE conversion progress bar wired into single-file flow)
-Last activity: 2026-02-25 — Plan 05-03 complete (setProgressBar/showDownloadButton helpers in ui.js; uploadSingle uses XHR progress 0-50%; convertSingle uses SSE 50-100%; Download button on completion)
+Plan: 4 of 5 in current phase — COMPLETE
+Status: Phase 5 in progress — Plan 04 complete (bulk workflow overhaul: per-file apiConvert + SSE tracking, X remove buttons, per-row Download buttons, smart defaults, summary banner, Download All ZIP)
+Last activity: 2026-02-25 — Plan 05-04 complete (renderBulkRow with progress bars/X/Download; convertBulk per-file apiConvert + Promise.allSettled SSE; summary banner; Download All ZIP button)
 
-Progress: [████████░░] 86%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Progress: [████████░░] 86%
 | Phase 05-progress-wiring-and-ui-polish P01 | ~3min | 2 tasks | 4 files |
 | Phase 05-progress-wiring-and-ui-polish P02 | ~2min | 3 tasks | 3 files |
 | Phase 05-progress-wiring-and-ui-polish P03 | ~1min | 2 tasks | 3 files |
+| Phase 05-progress-wiring-and-ui-polish P04 | 2min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,9 @@ Recent decisions affecting current work:
 - [Phase 05-progress-wiring-and-ui-polish]: Upload phase maps XHR ratio (0-1) to bar (0-50%); SSE percent (0-99) maps to bar (50-100%); done event sets 100%
 - [Phase 05-progress-wiring-and-ui-polish]: Output filename derived from original name + target format (backend Phase 3 contract returns only {job_id} from /api/convert, not output_filename)
 - [Phase 05-progress-wiring-and-ui-polish]: Download button shown on completion, no auto-download per user decision
+- [Phase 05-progress-wiring-and-ui-polish]: Per-file apiConvert (not apiBulkConvert) gives one job_id per file for independent SSE tracking in bulk mode
+- [Phase 05-progress-wiring-and-ui-polish]: Promise.allSettled opens all bulk SSE connections simultaneously — rows update independently without blocking
+- [Phase 05-progress-wiring-and-ui-polish]: Smart format default: renderBulkRow sets target_format to first available_formats entry if none set
 
 ### Pending Todos
 
@@ -99,5 +103,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 05-03-PLAN.md — two-phase single-file progress bar wired; setProgressBar/showDownloadButton added to ui.js; single.js uses XHR upload (0-50%) + SSE conversion (50-100%); Download button on completion.
+Stopped at: Completed 05-04-PLAN.md — bulk workflow overhaul complete; per-file apiConvert + Promise.allSettled SSE tracking; X remove buttons; per-row Download buttons; smart format defaults; summary banner; Download All ZIP button.
 Resume file: None
