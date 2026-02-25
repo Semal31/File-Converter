@@ -45,6 +45,14 @@ export function setSingleFile(id, fmt, cat, fmts) {
 }
 
 /**
+ * Set the selected output format for single-file conversion.
+ * @param {string} fmt
+ */
+export function setSingleFormat(fmt) {
+  singleFormat = fmt;
+}
+
+/**
  * Reset single-mode state back to defaults.
  */
 export function resetSingleState() {
