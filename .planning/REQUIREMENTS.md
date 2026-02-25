@@ -22,14 +22,14 @@ Requirements for this milestone. Each maps to roadmap phases.
 ### Progress Feedback
 
 - [x] **PROG-01**: Backend supports async job registry with fire-and-forget conversion and SSE progress endpoint
-- [ ] **PROG-02**: Frontend shows real conversion progress via SSE connection to backend
-- [ ] **PROG-03**: Frontend shows byte-level upload progress for large files via XHR
+- [x] **PROG-02**: Frontend shows real conversion progress via SSE connection to backend
+- [x] **PROG-03**: Frontend shows byte-level upload progress for large files via XHR
 
 ### UI Polish
 
 - [ ] **UIPX-01**: UI fonts self-hosted as local woff2 files instead of Google Fonts CDN (fixes offline deployments)
 - [ ] **UIPX-02**: Modern, polished dark theme redesign with consistent spacing and refined components
-- [ ] **UIPX-03**: Improved batch workflow with per-file format selection, smart defaults, and clear per-item status
+- [x] **UIPX-03**: Improved batch workflow with per-file format selection, smart defaults, and clear per-item status
 - [x] **UIPX-04**: Frontend JS refactored into ES modules (no build step, served as static files via nginx)
 
 ## v2 Requirements
@@ -76,11 +76,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ERRH-02 | Phase 2 | Complete |
 | ERRH-03 | Phase 2 | Complete |
 | PROG-01 | Phase 3 | Complete |
-| PROG-02 | Phase 5 | Pending |
-| PROG-03 | Phase 5 | Pending |
+| PROG-02 | Phase 5 | Complete |
+| PROG-03 | Phase 5 | Complete |
 | UIPX-01 | Phase 5 | Pending |
 | UIPX-02 | Phase 5 | Pending |
-| UIPX-03 | Phase 5 | Pending |
+| UIPX-03 | Phase 5 | Complete |
 | UIPX-04 | Phase 4 | Complete |
 
 **Coverage:**

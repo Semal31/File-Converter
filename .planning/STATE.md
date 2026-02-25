@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 
 ## Current Position
 
-Phase: 4 of 5 (Frontend ES Module Refactor) — COMPLETE
-Plan: 2 of 2 in current phase — COMPLETE
-Status: Phase 4 complete — all plans done; ready for Phase 5
-Last activity: 2026-02-25 — Plan 04-02 complete (single.js, bulk.js, main.js created; index.html stripped to clean HTML shell; all 15 browser verification items passed by human)
+Phase: 5 of 5 (Progress Wiring and UI Polish)
+Plan: 2 of 5 in current phase — COMPLETE
+Status: Phase 5 in progress — Plan 02 complete (api.js transport layer, nginx SSE proxy, backend bulk-download-zip)
+Last activity: 2026-02-25 — Plan 05-02 complete (apiUploadWithProgress, watchJobProgress, apiBulkUploadWithProgress, apiBulkDownloadZip added to api.js; nginx SSE proxy; backend ZIP endpoint)
 
-Progress: [████████░░] 80%
+Progress: [████████░░] 84%
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Progress: [████████░░] 80%
 | Phase 03-backend-progress-infrastructure P02 | 3min | 2 tasks | 1 files |
 | Phase 04-frontend-es-module-refactor P01 | 3min | 2 tasks | 4 files |
 | Phase 04-frontend-es-module-refactor P02 | ~25min | 3 tasks | 5 files |
+| Phase 05-progress-wiring-and-ui-polish P02 | ~2min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,10 @@ Recent decisions affecting current work:
 - [Phase 04-frontend-es-module-refactor]: renderBulkRow inline onchange removed; initBulkListDelegation() attaches single delegated listener on #bulk-file-list
 - [Phase 04-frontend-es-module-refactor]: single.js imports uploadBulk from bulk.js directly (acyclic: single->bulk, no reverse) — handleFiles routing stays clean without registration pattern
 - [Phase 04-frontend-es-module-refactor]: setSingleFormat() added to state.js to allow selectSingleFormat in single.js to update only the format field without resetting file_id/category/fmts
+- [Phase 05-progress-wiring-and-ui-polish]: watchJobProgress uses 'message' event listener (not named events) because backend SSE uses unnamed events (no event: field in stream)
+- [Phase 05-progress-wiring-and-ui-polish]: apiBulkDownloadZip uses hidden <a> click (not fetch/XHR) — backend streams file with Content-Disposition: attachment; browser handles natively
+- [Phase 05-progress-wiring-and-ui-polish]: apiBulkUploadWithProgress uploads files sequentially (not concurrently) to avoid server overload; each gets own XHR for accurate per-file progress
+- [Phase 05-progress-wiring-and-ui-polish]: bulk-download-zip GET endpoint with repeated ?ids= query params (not POST/JSON) so frontend triggers download with plain <a> href/click
 
 ### Pending Todos
 
@@ -86,5 +91,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 04-02-PLAN.md — single.js, bulk.js, main.js created; index.html stripped to clean HTML shell; Phase 4 ES module refactor fully complete with human browser verification passed.
+Stopped at: Completed 05-02-PLAN.md — api.js XHR/SSE transport layer, nginx SSE proxy, and backend /api/bulk-download-zip endpoint complete.
 Resume file: None
