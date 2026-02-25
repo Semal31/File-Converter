@@ -17,6 +17,7 @@ import {
   renderBulkList,
   updateBulkRowStatus,
   updateBulkRowProgress,
+  setProgressBar,
   esc,
 } from './ui.js';
 
@@ -29,15 +30,23 @@ import {
  */
 export async function uploadBulk(files) {
   const filesArr = Array.from(files);
+  const total = filesArr.length;
 
-  showStatus('status-bulk', 'info', `Uploading ${filesArr.length} file(s)…`);
+  // Show upload progress bar
+  const progressWrap = document.getElementById('progress-wrap-bulk-upload');
+  progressWrap.style.display = '';
+  document.getElementById('progress-fill-bulk-upload').style.width = '0%';
+  setProgressBar('progress-fill-bulk-upload', 'progress-label-bulk-upload', 0, `Uploading 1/${total}…`);
 
   try {
-    const data = await apiBulkUploadWithProgress(filesArr, (_fileIndex, _ratio) => {
-      // Upload progress per file — noted but not wired to rows here because
-      // rows are added after upload completes (we don't yet have row indices).
-      // General status message serves as upload phase feedback.
+    const data = await apiBulkUploadWithProgress(filesArr, (fileIndex, ratio) => {
+      // Overall progress: completed files + current file's ratio
+      const overall = ((fileIndex + ratio) / total) * 100;
+      setProgressBar('progress-fill-bulk-upload', 'progress-label-bulk-upload', overall, `Uploading ${fileIndex + 1}/${total}…`);
     });
+
+    // Upload complete
+    setProgressBar('progress-fill-bulk-upload', 'progress-label-bulk-upload', 100, 'Upload complete!');
 
     // Merge results into bulkFiles state
     data.files.forEach(f => {
@@ -60,10 +69,13 @@ export async function uploadBulk(files) {
       }
     });
 
+    // Hide progress bar, show file list
+    progressWrap.style.display = 'none';
     clearStatus('status-bulk');
     renderBulkList(getBulkFiles());
     document.getElementById('bulk-list-card').style.display = '';
   } catch (err) {
+    progressWrap.style.display = 'none';
     showStatus('status-bulk', 'error', buildErrorHtml(err.message, err.rawDetail || null));
   }
 }
@@ -198,8 +210,13 @@ export async function convertBulk() {
       count:   doneFiles.length,
       errors:  failed,
       quality: currentQuality,
-      // Use first completed file's download_id for the history link
-      download_id: doneFiles[0].download_id,
+      // Individual file details for history dropdown
+      files: doneFiles.map(f => ({
+        filename:    f.filename,
+        from:        (f.detected_format || '').toUpperCase(),
+        to:          (f.target_format || '').toUpperCase(),
+        download_id: f.download_id,
+      })),
     });
   }
 

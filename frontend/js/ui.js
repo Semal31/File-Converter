@@ -1,7 +1,7 @@
 /* ── UI helpers and rendering functions ─────────────────────────────────── */
 
 import { history, clearHistoryState, setBulkFormat, removeBulkFile, getBulkFiles } from './state.js';
-import { apiDownloadUrl } from './api.js';
+import { apiDownloadUrl, apiBulkDownloadZip } from './api.js';
 
 /* ── Circular dependency resolution ─────────────────────────────────────── */
 // renderSingleFormats needs selectSingleFormat from single.js, but single.js
@@ -353,34 +353,85 @@ export function renderHistory() {
     return;
   }
   list.innerHTML = '';
-  history.forEach(h => {
-    const item = document.createElement('div');
-    item.className = 'history-item';
-
-    let icon, nameHtml, detailHtml, actionHtml;
-
+  history.forEach((h, hi) => {
     if (h.type === 'single') {
-      icon       = '📄';
-      nameHtml   = esc(h.filename);
-      detailHtml = `${h.from} → ${h.to} &nbsp;·&nbsp; quality: ${h.quality} &nbsp;·&nbsp; ${timeAgo(h.ts)}`;
-      actionHtml = `<a class="history-dl" href="/api/download/${h.download_id}" download="${h.filename}">↓ Download</a>`;
+      const item = document.createElement('div');
+      item.className = 'history-item';
+      item.innerHTML = `
+        <span class="history-icon">📄</span>
+        <div class="history-meta">
+          <div class="history-name">${esc(h.filename)}</div>
+          <div class="history-detail">${h.from} → ${h.to} &nbsp;·&nbsp; quality: ${h.quality} &nbsp;·&nbsp; ${timeAgo(h.ts)}</div>
+        </div>
+        <div class="history-action">
+          <a class="history-dl" href="/api/download/${h.download_id}" download="${esc(h.filename)}">↓ Download</a>
+        </div>
+      `;
+      list.appendChild(item);
     } else {
-      icon       = '📦';
-      nameHtml   = `converted.zip`;
-      detailHtml = `${h.count} file(s) converted${h.errors ? ` (${h.errors} failed)` : ''} &nbsp;·&nbsp; quality: ${h.quality} &nbsp;·&nbsp; ${timeAgo(h.ts)}`;
-      actionHtml = `<a class="history-dl" href="/api/download/${h.download_id}" download="converted.zip">↓ Download ZIP</a>`;
-    }
+      // Bulk entry with expandable file list
+      const wrap = document.createElement('div');
+      wrap.className = 'history-bulk-wrap';
 
-    item.innerHTML = `
-      <span class="history-icon">${icon}</span>
-      <div class="history-meta">
-        <div class="history-name">${nameHtml}</div>
-        <div class="history-detail">${detailHtml}</div>
-      </div>
-      <div class="history-action">${actionHtml}</div>
-    `;
-    list.appendChild(item);
+      const header = document.createElement('div');
+      header.className = 'history-item history-bulk-header';
+      header.innerHTML = `
+        <span class="history-icon">📦</span>
+        <div class="history-meta">
+          <div class="history-name">Bulk conversion &nbsp;·&nbsp; ${h.count} file${h.count !== 1 ? 's' : ''}</div>
+          <div class="history-detail">${h.count} converted${h.errors ? `, ${h.errors} failed` : ''} &nbsp;·&nbsp; quality: ${h.quality} &nbsp;·&nbsp; ${timeAgo(h.ts)}</div>
+        </div>
+        <div class="history-action" style="display:flex;align-items:center;gap:6px;">
+          <button class="history-dl history-zip-btn" data-hi="${hi}">↓ ZIP</button>
+          <button class="history-dl history-expand-btn" data-hi="${hi}">▸ Files</button>
+        </div>
+      `;
+      wrap.appendChild(header);
+
+      // Expandable file list (hidden by default)
+      if (h.files && h.files.length) {
+        const fileList = document.createElement('div');
+        fileList.className = 'history-bulk-files';
+        fileList.id = `history-files-${hi}`;
+        h.files.forEach(f => {
+          const row = document.createElement('div');
+          row.className = 'history-bulk-file';
+          row.innerHTML = `
+            <span class="history-bulk-file-name">${esc(f.filename)}</span>
+            <span class="history-bulk-file-fmt">${f.from} → ${f.to}</span>
+            <a class="history-dl" href="${apiDownloadUrl(f.download_id)}" download="${esc(f.filename)}">↓</a>
+          `;
+          fileList.appendChild(row);
+        });
+        wrap.appendChild(fileList);
+      }
+
+      list.appendChild(wrap);
+    }
   });
+
+  // Delegate expand/zip clicks
+  list.onclick = (e) => {
+    const expandBtn = e.target.closest('.history-expand-btn');
+    if (expandBtn) {
+      const hi = expandBtn.dataset.hi;
+      const files = document.getElementById(`history-files-${hi}`);
+      if (files) {
+        const open = files.classList.toggle('open');
+        expandBtn.textContent = open ? '▾ Files' : '▸ Files';
+      }
+      return;
+    }
+    const zipBtn = e.target.closest('.history-zip-btn');
+    if (zipBtn) {
+      const hi = parseInt(zipBtn.dataset.hi, 10);
+      const h = history[hi];
+      if (h && h.files) {
+        const ids = h.files.filter(f => f.download_id).map(f => f.download_id);
+        if (ids.length) apiBulkDownloadZip(ids);
+      }
+    }
+  };
 }
 
 /**

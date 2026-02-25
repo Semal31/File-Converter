@@ -204,6 +204,7 @@ export function resetAll() {
   document.getElementById('download-area-single').innerHTML = '';
 
   resetBulkState();
+  document.getElementById('progress-wrap-bulk-upload').style.display = 'none';
   document.getElementById('bulk-file-list').innerHTML = '';
   document.getElementById('bulk-list-card').style.display = 'none';
   document.getElementById('bulk-summary').style.display = 'none';

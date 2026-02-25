@@ -489,6 +489,53 @@ html, body {
   padding: 20px 0; text-align: center;
 }
 
+/* Bulk history expandable */
+.history-bulk-wrap {
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  animation: fadeUp 0.25s ease both;
+}
+.history-bulk-wrap .history-bulk-header {
+  border: none;
+  border-radius: 0;
+  animation: none;
+}
+.history-bulk-files {
+  display: none;
+  border-top: 1px solid var(--border-dim);
+  background: var(--panel);
+}
+.history-bulk-files.open { display: block; }
+.history-bulk-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 8px 48px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border-dim);
+}
+.history-bulk-file:last-child { border-bottom: none; }
+.history-bulk-file-name {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text);
+}
+.history-bulk-file-fmt {
+  flex-shrink: 0;
+  font-family: var(--font-m);
+  font-size: 10px;
+  color: var(--text-2);
+}
+.history-bulk-file .history-dl {
+  padding: 3px 8px;
+  font-size: 10px;
+}
+.history-expand-btn, .history-zip-btn {
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 /* ── About page ──────────────────────────────────────────────────────── */
 .about-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
 .about-card {

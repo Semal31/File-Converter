@@ -25,7 +25,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -54,7 +54,7 @@ def _spawn_job_task(coro) -> asyncio.Task:
     return task
 
 TEMP_DIR = Path(tempfile.mkdtemp(prefix="fc_"))
-FILE_TTL = 3600  # 1 hour
+FILE_TTL = 86400  # 24 hours
 CLEANUP_INTERVAL = 300  # 5 minutes
 
 # Valid quality values accepted by all lossy converters
@@ -567,23 +567,16 @@ async def bulk_convert(
 # ── Download (shared by single and bulk) ─────────────────────────────────────
 
 @app.get("/api/download/{download_id}", tags=["single", "bulk"])
-async def download(download_id: str, background_tasks: BackgroundTasks) -> FileResponse:
-    """Stream the converted file (or ZIP) to the client, then clean it up."""
+async def download(download_id: str) -> FileResponse:
+    """Stream the converted file. File remains available until TTL expiry."""
     dl = DOWNLOADS.get(download_id)
     if dl is None:
-        raise HTTPException(status_code=404, detail={"message": "Download not found or already consumed.", "detail": None})
+        raise HTTPException(status_code=404, detail={"message": "Download not found or expired.", "detail": None})
 
     out_path = Path(dl["path"])
     if not out_path.exists():
         DOWNLOADS.pop(download_id, None)
         raise HTTPException(status_code=410, detail={"message": "File is no longer available.", "detail": None})
-
-    def _cleanup() -> None:
-        out_path.unlink(missing_ok=True)
-        DOWNLOADS.pop(download_id, None)
-        log.info("Download consumed: %s", dl["filename"])
-
-    background_tasks.add_task(_cleanup)
 
     return FileResponse(
         path=str(out_path),

@@ -38,4 +38,4 @@ COPY frontend/ /app/frontend/
 ENV PORT=8070
 EXPOSE 8070
 
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT} --workers 2"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT} --workers 1"]

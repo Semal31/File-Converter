@@ -12,8 +12,25 @@ export let singleFmts     = [];
 export let bulkFiles = [];
 // [{file_id, filename, size, category, detected_format, available_formats, target_format, status, error, errorDetail, download_id, progress}]
 
-/* History */
-export let history = [];
+/* History — persisted to localStorage, entries expire after 24h */
+const _HISTORY_KEY = 'fc_history';
+const _HISTORY_TTL = 24 * 60 * 60 * 1000; // 24 hours in ms
+
+function _loadHistory() {
+  try {
+    const raw = localStorage.getItem(_HISTORY_KEY);
+    if (!raw) return [];
+    const items = JSON.parse(raw);
+    const cutoff = Date.now() - _HISTORY_TTL;
+    return items.filter(h => h.ts > cutoff);
+  } catch { return []; }
+}
+
+function _saveHistory() {
+  try { localStorage.setItem(_HISTORY_KEY, JSON.stringify(history)); } catch {}
+}
+
+export let history = _loadHistory();
 
 /* ── Quality ─────────────────────────────────────────────────────────────── */
 
@@ -114,6 +131,7 @@ export function removeBulkFile(index) {
 export function addToHistory(entry) {
   history.unshift({ ...entry, ts: Date.now() });
   if (history.length > 50) history.pop();
+  _saveHistory();
 }
 
 /**
@@ -121,4 +139,5 @@ export function addToHistory(entry) {
  */
 export function clearHistoryState() {
   history = [];
+  _saveHistory();
 }
