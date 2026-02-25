@@ -330,6 +330,42 @@ export function clearHistory() {
 }
 
 /**
+ * Set the progress bar fill width and update the label text with percentage.
+ * @param {string} fillId - ID of the progress bar fill element
+ * @param {string} labelId - ID of the progress label element
+ * @param {number} percent - progress percentage (0-100)
+ * @param {string} labelText - label prefix text (e.g. 'Uploading…' or 'Converting…')
+ */
+export function setProgressBar(fillId, labelId, percent, labelText) {
+  const fill = document.getElementById(fillId);
+  const label = document.getElementById(labelId);
+  if (fill) fill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+  if (label) label.textContent = `${labelText} ${Math.round(percent)}%`;
+}
+
+/**
+ * Show a download button in a container element.
+ * Uses esc() for XSS-safe filename rendering.
+ * @param {string} containerId - ID of the container element to populate
+ * @param {string} downloadId - download ID for the /api/download/ URL
+ * @param {string} filename - output filename shown on the button
+ */
+export function showDownloadButton(containerId, downloadId, filename) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const url = `/api/download/${downloadId}`;
+  container.innerHTML = `<a href="${url}" download="${esc(filename)}" class="btn btn-success">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    Download ${esc(filename)}
+  </a>`;
+  container.style.display = '';
+}
+
+/**
  * Attach a single 'change' event listener on #bulk-file-list that delegates
  * to setBulkFormat (imported from state.js) when a SELECT element changes.
  */
