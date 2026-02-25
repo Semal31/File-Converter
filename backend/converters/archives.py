@@ -96,6 +96,10 @@ class ArchiveConverter(BaseConverter):
             import py7zr  # type: ignore
 
             with py7zr.SevenZipFile(path, "r") as sz:
+                for name in sz.getnames():
+                    member_path = (dest / name).resolve()
+                    if not str(member_path).startswith(str(dest.resolve())):
+                        raise ValueError(f"7z entry '{name}' would escape extraction directory")
                 sz.extractall(dest)
         else:
             raise ValueError(f"Cannot extract from format: {fmt!r}")

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Container version="2">
+  <Name>file-converter</Name>
+  <Repository>semal31/file-converter:latest</Repository>
+  <Registry>https://hub.docker.com/r/semal31/file-converter</Registry>
+  <Branch>
+    <Tag>latest</Tag>
+    <TagDescription>Latest stable release</TagDescription>
+  </Branch>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Shell>bash</Shell>
+  <Project>https://github.com/semal31/file-converter</Project>
+  <Support>https://github.com/semal31/file-converter/issues</Support>
+  <Overview>Self-hosted file conversion tool. Convert between documents (DOCX, PDF, MD, HTML, TXT), images (PNG, JPG, WEBP, GIF, TIFF, BMP, ICO, SVG), audio (MP3, WAV, OGG, FLAC, AAC, M4A), video (MP4, MKV, AVI, WEBM, MOV, GIF), data (CSV, JSON, XLSX, XML, YAML, TSV), and archives (ZIP, TAR, TAR.GZ, 7Z). No cloud, no tracking.</Overview>
+  <Category>Productivity:</Category>
+  <Icon>https://raw.githubusercontent.com/semal31/file-converter/main/unraid/icon.png</Icon>
+  <WebUI>http://[IP]:[PORT:8070]/</WebUI>
+  <ExtraParams/>
+  <DonateText/>
+  <DonateLink/>
+  <DonateImg/>
+
+  <!-- Port -->
+  <Config Name="Web UI Port" Target="8070" Default="8070" Mode="tcp" Type="Port" Display="always" Required="true" Description="Port for the web interface."/>
+
+  <!-- Paths -->
+  <Config Name="AppData" Target="/app/data" Default="/mnt/user/appdata/file-converter" Mode="rw" Type="Path" Display="always" Required="true" Description="Stores temporary uploads and converted files. Auto-cleaned after FILE_TTL seconds."/>
+
+  <!-- Environment Variables -->
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Type="Variable" Display="always" Required="false" Description="User ID for file permissions."/>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Type="Variable" Display="always" Required="false" Description="Group ID for file permissions."/>
+  <Config Name="TZ" Target="TZ" Default="America/New_York" Mode="" Type="Variable" Display="always" Required="false" Description="Timezone (e.g. America/New_York, Europe/London)."/>
+  <Config Name="PORT" Target="PORT" Default="8070" Mode="" Type="Variable" Display="advanced" Required="false" Description="Internal port for the web server. Must match the port mapping above."/>
+  <Config Name="FILE_TTL" Target="FILE_TTL" Default="86400" Mode="" Type="Variable" Display="advanced" Required="false" Description="Seconds before uploaded/converted files are auto-deleted. Default: 86400 (24 hours)."/>
+  <Config Name="MAX_UPLOAD_SIZE" Target="MAX_UPLOAD_SIZE" Default="536870912" Mode="" Type="Variable" Display="advanced" Required="false" Description="Maximum upload file size in bytes. Default: 536870912 (512 MB)."/>
+</Container>

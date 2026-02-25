@@ -17,7 +17,6 @@ import json as _json
 import logging
 import os
 import shutil
-import tempfile
 import time
 import uuid
 import zipfile
@@ -53,9 +52,10 @@ def _spawn_job_task(coro) -> asyncio.Task:
     task.add_done_callback(_RUNNING_TASKS.discard)
     return task
 
-TEMP_DIR = Path(tempfile.mkdtemp(prefix="fc_"))
-FILE_TTL = 86400  # 24 hours
+TEMP_DIR = Path(os.environ.get("DATA_DIR", "/app/data"))
+FILE_TTL = int(os.environ.get("FILE_TTL", "86400"))  # 24 hours
 CLEANUP_INTERVAL = 300  # 5 minutes
+MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", str(512 * 1024 * 1024)))  # 512 MB
 
 # Valid quality values accepted by all lossy converters
 _VALID_QUALITY = {"original", "high", "medium", "low", "lossless"}
@@ -102,15 +102,17 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
 
     log.info("Startup checks passed. All required binaries present.")
 
+    # Ensure data directory exists
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
     # ── Background cleanup loop ───────────────────────────────────────────
     task = asyncio.create_task(_cleanup_loop())
-    log.info("File converter started. Temp dir: %s", TEMP_DIR)
+    log.info("File converter started. Data dir: %s", TEMP_DIR)
     try:
         yield
     finally:
         task.cancel()
-        shutil.rmtree(TEMP_DIR, ignore_errors=True)
-        log.info("Temp dir removed. Shutdown complete.")
+        log.info("Shutdown complete.")
 
 
 async def _cleanup_loop() -> None:
@@ -235,7 +237,22 @@ def _classify_exc(exc: Exception) -> tuple[str, str | None]:
 async def _store_upload(file: UploadFile) -> dict:
     """Read, detect format, persist one UploadFile. Returns the upload metadata dict."""
     filename = file.filename or "upload"
-    content  = await file.read()
+
+    # Read in chunks to enforce size limit without loading unbounded data into memory
+    chunks = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)  # 1 MB chunks
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_UPLOAD_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail={"message": f"File exceeds maximum upload size of {MAX_UPLOAD_SIZE // (1024 * 1024)} MB.", "detail": None},
+            )
+        chunks.append(chunk)
+    content = b"".join(chunks)
 
     try:
         fmt, category = detect_format(filename, file.content_type)

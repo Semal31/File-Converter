@@ -8,14 +8,12 @@ services:
       - "8070:8070"
     environment:
       - PORT=8070
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
     volumes:
-      - fc_tmp:/tmp/fc
+      - fc_data:/app/data
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8070/api/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
 volumes:
-  fc_tmp:
+  fc_data:

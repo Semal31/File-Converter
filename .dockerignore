@@ -1,0 +1,12 @@
+.venv
+.git
+.gitignore
+.planning
+.claude
+.github
+__pycache__
+*.pyc
+*.md
+unraid/
+*.log
+.env
