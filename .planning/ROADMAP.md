@@ -90,7 +90,14 @@ Plans:
   3. The app loads and displays fonts correctly with no internet connection — no requests to Google Fonts CDN
   4. A user converting multiple files in bulk can select a different target format per file before converting, and each row shows its individual success or error status after the batch completes
   5. The dark theme looks visually consistent and polished — spacing, typography, and component states are refined throughout
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Self-hosted fonts (Inter + JetBrains Mono woff2) and emerald dark theme redesign
+- [ ] 05-02-PLAN.md — XHR upload progress, EventSource SSE consumer, nginx SSE proxy config
+- [ ] 05-03-PLAN.md — Single-file two-phase progress bar (XHR upload 0-50%, SSE convert 50-100%)
+- [ ] 05-04-PLAN.md — Bulk workflow overhaul: per-row progress, smart defaults, remove button, Download All
+- [ ] 05-05-PLAN.md — Full browser verification of all Phase 5 features
 
 ## Progress
 
@@ -105,4 +112,4 @@ Note: Phases 3 and 4 have no dependency on each other and can be worked in paral
 | 2. Error Handling | 2/2 | Complete    | 2026-02-24 |
 | 3. Backend Progress Infrastructure | 2/2 | Complete   | 2026-02-24 |
 | 4. Frontend ES Module Refactor | 2/2 | Complete   | 2026-02-25 |
-| 5. Progress Wiring and UI Polish | 0/TBD | Not started | - |
+| 5. Progress Wiring and UI Polish | 0/5 | Not started | - |
