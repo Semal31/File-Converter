@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 ## Current Position
 
 Phase: 5 of 5 (Progress Wiring and UI Polish)
-Plan: 2 of 5 in current phase — COMPLETE
-Status: Phase 5 in progress — Plan 02 complete (api.js transport layer, nginx SSE proxy, backend bulk-download-zip)
-Last activity: 2026-02-25 — Plan 05-02 complete (apiUploadWithProgress, watchJobProgress, apiBulkUploadWithProgress, apiBulkDownloadZip added to api.js; nginx SSE proxy; backend ZIP endpoint)
+Plan: 3 of 5 in current phase — COMPLETE
+Status: Phase 5 in progress — Plan 03 complete (two-phase XHR upload + SSE conversion progress bar wired into single-file flow)
+Last activity: 2026-02-25 — Plan 05-03 complete (setProgressBar/showDownloadButton helpers in ui.js; uploadSingle uses XHR progress 0-50%; convertSingle uses SSE 50-100%; Download button on completion)
 
-Progress: [████████░░] 84%
+Progress: [████████░░] 86%
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Progress: [████████░░] 84%
 | Phase 04-frontend-es-module-refactor P02 | ~25min | 3 tasks | 5 files |
 | Phase 05-progress-wiring-and-ui-polish P01 | ~3min | 2 tasks | 4 files |
 | Phase 05-progress-wiring-and-ui-polish P02 | ~2min | 3 tasks | 3 files |
+| Phase 05-progress-wiring-and-ui-polish P03 | ~1min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,9 @@ Recent decisions affecting current work:
 - [Phase 05-progress-wiring-and-ui-polish]: apiBulkDownloadZip uses hidden <a> click (not fetch/XHR) — backend streams file with Content-Disposition: attachment; browser handles natively
 - [Phase 05-progress-wiring-and-ui-polish]: apiBulkUploadWithProgress uploads files sequentially (not concurrently) to avoid server overload; each gets own XHR for accurate per-file progress
 - [Phase 05-progress-wiring-and-ui-polish]: bulk-download-zip GET endpoint with repeated ?ids= query params (not POST/JSON) so frontend triggers download with plain <a> href/click
+- [Phase 05-progress-wiring-and-ui-polish]: Upload phase maps XHR ratio (0-1) to bar (0-50%); SSE percent (0-99) maps to bar (50-100%); done event sets 100%
+- [Phase 05-progress-wiring-and-ui-polish]: Output filename derived from original name + target format (backend Phase 3 contract returns only {job_id} from /api/convert, not output_filename)
+- [Phase 05-progress-wiring-and-ui-polish]: Download button shown on completion, no auto-download per user decision
 
 ### Pending Todos
 
@@ -95,5 +99,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 05-02-PLAN.md — api.js XHR/SSE transport layer, nginx SSE proxy, and backend /api/bulk-download-zip endpoint complete.
+Stopped at: Completed 05-03-PLAN.md — two-phase single-file progress bar wired; setProgressBar/showDownloadButton added to ui.js; single.js uses XHR upload (0-50%) + SSE conversion (50-100%); Download button on completion.
 Resume file: None
