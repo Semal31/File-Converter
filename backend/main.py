@@ -8,9 +8,11 @@ Endpoints:
     POST /api/bulk-convert               -> start async conversions, get per-file job_ids
     GET  /api/progress/{job_id}          -> SSE stream of job progress events
     GET  /api/download/{download_id}     -> stream converted file
+    GET  /api/bulk-download-zip          -> stream ZIP archive of multiple converted files
 """
 
 import asyncio
+import io
 import json as _json
 import logging
 import os
@@ -18,13 +20,14 @@ import shutil
 import tempfile
 import time
 import uuid
+import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sse_starlette import EventSourceResponse
 
@@ -586,6 +589,69 @@ async def download(download_id: str, background_tasks: BackgroundTasks) -> FileR
         path=str(out_path),
         filename=dl["filename"],
         media_type="application/octet-stream",
+    )
+
+
+@app.get("/api/bulk-download-zip", tags=["bulk"])
+async def bulk_download_zip(ids: List[str]) -> Response:
+    """Stream a ZIP archive containing all requested downloads.
+
+    Query params: ?ids=uuid1&ids=uuid2&...
+    Each id must be a valid download_id from a completed conversion.
+    Missing or expired IDs are silently skipped (the ZIP contains only found files).
+    """
+    if not ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "No download IDs provided.", "detail": None},
+        )
+
+    # Collect valid download entries
+    entries = []  # list of (filename, path) tuples
+    seen_names = {}  # track filename collisions
+    for did in ids:
+        dl = DOWNLOADS.get(did)
+        if dl is None:
+            continue
+        p = Path(dl["path"])
+        if not p.exists():
+            continue
+        # Deduplicate filenames: if "file.pdf" already in ZIP, rename to "file (2).pdf"
+        name = dl["filename"]
+        if name in seen_names:
+            seen_names[name] += 1
+            stem, dot, ext = name.rpartition(".")
+            if dot:
+                name = f"{stem} ({seen_names[name]}).{ext}"
+            else:
+                name = f"{name} ({seen_names[name]})"
+        else:
+            seen_names[name] = 1
+        entries.append((name, p))
+
+    if not entries:
+        raise HTTPException(
+            status_code=404,
+            detail={"message": "None of the requested downloads were found.", "detail": None},
+        )
+
+    # Build ZIP in memory
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, path in entries:
+            zf.write(str(path), arcname=name)
+    buf.seek(0)
+    zip_bytes = buf.getvalue()
+
+    log.info("Bulk ZIP download: %d file(s), %d bytes", len(entries), len(zip_bytes))
+
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="converted-files.zip"',
+            "Content-Length": str(len(zip_bytes)),
+        },
     )
 
 
