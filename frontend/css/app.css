@@ -1,3 +1,19 @@
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/inter-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('../fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
+}
+
 /* ── Design tokens (Glacier + Dusk) ──────────────────────────────────── */
 :root {
   --bg:           #1a1915;
@@ -18,8 +34,8 @@
   --warning:      #F59E0B;
   --radius:       14px;
   --radius-sm:    8px;
-  --font-d:       'Syne', sans-serif;
-  --font-m:       'IBM Plex Mono', monospace;
+  --font-d:       'Inter Variable', system-ui, sans-serif;
+  --font-m:       'JetBrains Mono Variable', monospace;
   --shadow:       0 4px 24px -4px rgba(0,0,0,0.55);
 }
 
