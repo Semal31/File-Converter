@@ -206,5 +206,8 @@ export function resetAll() {
   resetBulkState();
   document.getElementById('bulk-file-list').innerHTML = '';
   document.getElementById('bulk-list-card').style.display = 'none';
+  document.getElementById('bulk-summary').style.display = 'none';
+  document.getElementById('bulk-download-all').style.display = 'none';
+  document.getElementById('bulk-download-all').innerHTML = '';
   clearStatus('status-bulk');
 }
